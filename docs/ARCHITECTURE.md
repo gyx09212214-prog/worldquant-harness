@@ -7,7 +7,7 @@ QuantGPT 是 Agent-Driven 的因子研究引擎。核心架构分为六层：Age
 ```
 LLM Agent (Claude Code / Claude Desktop)
     │
-    ├── MCP Tools (10 个)            ← Agent 的工具箱
+    ├── MCP Tools (14 个)            ← Agent 的工具箱
     │   ├── run_backtest              ← 全市场分组回测
     │   ├── score_factor              ← 0-100 综合评分
     │   ├── diagnose_factor           ← 失败模式诊断
@@ -15,8 +15,12 @@ LLM Agent (Claude Code / Claude Desktop)
     │   ├── run_rolling_validation    ← Walk-forward 验证
     │   ├── validate_expression       ← 语法校验（local/wq 双模式）
     │   ├── list_operators / list_universes
-    │   ├── wq_brain_pre_check        ← 自相关预筛
-    │   └── wq_brain_batch_submit     ← 批量参数扫描提交
+    │   ├── wq_brain_submit           ← WQ BRAIN 单因子提交
+    │   ├── wq_brain_batch_submit     ← 批量参数扫描提交
+    │   ├── wq_brain_submit_by_ids    ← 按 ID 提交
+    │   ├── wq_brain_list_alphas      ← 查询已提交 alpha
+    │   ├── wq_brain_check_alphas     ← 检查 alpha 状态
+    │   └── wq_brain_finalize_submissions ← 最终提交确认
     │
     ├── REST API                      ← 程序化访问
     │   ├── /api/v1/auto_backtest
@@ -126,11 +130,12 @@ Request
 
 ### MCP Server (`mcp_server.py`)
 
-10 个 MCP 工具，供 Claude Code / AI Agent 直接调用：
+14 个 MCP 工具，供 Claude Code / AI Agent 直接调用：
 - `list_operators` / `list_universes`
 - `validate_expression` / `run_backtest` / `score_factor`
 - `diagnose_factor` / `run_anti_overfit` / `run_rolling_validation`
-- `wq_brain_pre_check` / `wq_brain_batch_submit`
+- `wq_brain_submit` / `wq_brain_batch_submit` / `wq_brain_submit_by_ids`
+- `wq_brain_list_alphas` / `wq_brain_check_alphas` / `wq_brain_finalize_submissions`
 
 ### WQ BRAIN Integration (`wq_brain_client.py`)
 

@@ -430,10 +430,10 @@ export default function ResearchDashboard() {
                   <p className={`text-xs font-medium uppercase tracking-wider mb-2.5 ${textMuted}`}>WQ BRAIN Simulation</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                     {[
-                      { label: "WQ Sharpe", value: selectedTask.result.wq_brain.wq_sharpe.toFixed(2) },
-                      { label: "WQ Fitness", value: selectedTask.result.wq_brain.wq_fitness.toFixed(3) },
-                      { label: "WQ Returns", value: `${(selectedTask.result.wq_brain.wq_returns * 100).toFixed(1)}%` },
-                      { label: "WQ Rating", value: selectedTask.result.wq_brain.wq_rating },
+                      { label: "WQ Sharpe", value: selectedTask.result.wq_brain.wq_sharpe?.toFixed(2) ?? "—" },
+                      { label: "WQ Fitness", value: selectedTask.result.wq_brain.wq_fitness?.toFixed(3) ?? "—" },
+                      { label: "WQ Returns", value: selectedTask.result.wq_brain.wq_returns != null ? `${(selectedTask.result.wq_brain.wq_returns * 100).toFixed(1)}%` : "—" },
+                      { label: "WQ Rating", value: selectedTask.result.wq_brain.wq_rating ?? "—" },
                     ].map(({ label, value }) => (
                       <div key={label} className={`p-2.5 rounded-lg border ${border} ${surfaceAlt}`}>
                         <p className={`text-xs ${textMuted}`}>{label}</p>

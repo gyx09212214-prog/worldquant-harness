@@ -21,6 +21,13 @@ from ..task_store import (
     MAX_ACTIVE_TASKS,
 )
 from ..wq_brain_client import get_client, is_configured
+from ..wq_brain_service import (
+    fitness_to_grade,
+    run_batch_simulation,
+    run_check_alphas,
+    run_submit_by_ids,
+    safe_float,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +71,7 @@ class BatchFinalizeRequest(BaseModel):
 
 
 
-def _safe_float(val) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
+_safe_float = safe_float
 
 
 def _classify_alpha_check(data: dict) -> dict:
@@ -158,10 +159,7 @@ def _run_batch_task(task_id: str, req: WQBrainBatchRequest, user_id: str):
     if not task:
         return
 
-    combos = list(itertools.product(req.regions, req.delays, req.universes, req.neutralizations))
-    task["total_combinations"] = len(combos)
     task["completed_combinations"] = 0
-    task["sub_results"] = {}
 
     try:
         account = req.account if req.account in ("primary", "alt") else "primary"
@@ -173,104 +171,32 @@ def _run_batch_task(task_id: str, req: WQBrainBatchRequest, user_id: str):
             return
 
         task["status"] = "running"
-        best_fitness = -999
-        best_key = None
-        submittable_count = 0
 
-        for i, (region, delay, universe, neut) in enumerate(combos):
-            if task.get("cancelled"):
-                task["status"] = "cancelled"
-                break
+        def on_progress(current, total, key):
+            task["progress_message"] = f"[{current}/{total}] {key}"
+            task["completed_combinations"] = current
 
-            key = f"{region}_D{delay}_{universe}_{neut}"
-            task["progress_message"] = f"[{i+1}/{len(combos)}] {key}"
-
-            result = client.simulate(
-                expression=req.expression,
-                region=region,
-                universe=universe,
-                delay=delay,
-                decay=req.decay,
-                neutralization=neut,
-                truncation=req.truncation,
-            )
-
-            sub = {"key": key, "region": region, "delay": delay, "universe": universe, "neutralization": neut}
-
-            if not result.get("ok"):
-                sub["status"] = "failed"
-                sub["error"] = result.get("error", "unknown")
-            else:
-                alpha_id = result.get("alpha_id")
-                is_data = result.get("is", {})
-
-                sharpe = _safe_float(is_data.get("sharpe"))
-                fitness = _safe_float(is_data.get("fitness"))
-                returns_val = _safe_float(is_data.get("returns"))
-                turnover = _safe_float(is_data.get("turnover"))
-                rating = "A" if (fitness or 0) >= 1.0 else ("B" if (fitness or 0) >= 0.5 else "C")
-
-                submitted = False
-                if req.auto_submit and alpha_id and rating == "A":
-                    submit_result = client.submit_alpha(alpha_id)
-                    submitted = submit_result.get("ok", False)
-
-                if submitted and alpha_id:
-                    try:
-                        from ..alpha_tracker import record_submitted_alpha_sync
-                        record_submitted_alpha_sync(
-                            user_id=user_id, alpha_id=alpha_id, expression=req.expression,
-                            region=region, universe=universe, delay=delay,
-                            decay=req.decay, neutralization=neut,
-                            truncation=req.truncation, sharpe=sharpe, fitness=fitness,
-                            returns=returns_val, turnover=turnover, tag=req.tag,
-                        )
-                    except Exception as e:
-                        logger.warning(f"[{task_id}] alpha tracking failed for {key}: {e}")
-
-                sub["status"] = "completed"
-                sub["alpha_id"] = alpha_id
-                sub["sharpe"] = sharpe
-                sub["fitness"] = fitness
-                sub["returns"] = returns_val
-                sub["turnover"] = turnover
-                sub["submitted"] = submitted
-                sub["rating"] = rating
-
-                if rating == "A":
-                    submittable_count += 1
-                if fitness is not None and fitness > best_fitness:
-                    best_fitness = fitness
-                    best_key = key
-
-            task["sub_results"][key] = sub
-            task["completed_combinations"] = i + 1
-
+        result = run_batch_simulation(
+            client, expression=req.expression,
+            regions=req.regions, delays=req.delays,
+            universes=req.universes, neutralizations=req.neutralizations,
+            decay=req.decay, truncation=req.truncation,
+            auto_submit=req.auto_submit and account == "primary",
+            user_id=user_id, tag=req.tag,
+            on_progress=on_progress,
+            check_cancelled=lambda: task.get("cancelled", False),
+        )
         client.close()
 
-        best_rating = "A" if (best_fitness or 0) >= 1.0 else ("B" if (best_fitness or 0) >= 0.5 else ("C" if best_fitness is not None else "D"))
-
-        task["status"] = "completed"
-        task["result"] = {
-            "expression": req.expression,
-            "total_combinations": len(combos),
-            "completed": task["completed_combinations"],
-            "best_fitness": round(best_fitness, 4) if best_fitness > -999 else None,
-            "best_key": best_key,
-            "submittable_count": submittable_count,
-            "sub_results": task["sub_results"],
-            "backtest_summary": {
-                "wq_fitness": round(best_fitness, 4) if best_fitness > -999 else None,
-                "wq_rating": best_rating,
-            },
-            "wq_brain": {
-                "wq_fitness": round(best_fitness, 4) if best_fitness > -999 else None,
-                "wq_rating": best_rating,
-            },
-            "interpretation": {
-                "rating": best_rating,
-            },
-        }
+        if task.get("cancelled"):
+            task["status"] = "cancelled"
+        elif not result.get("ok"):
+            task["status"] = "failed"
+            task["error"] = result.get("error", "all simulations failed")
+            task["result"] = result
+        else:
+            task["status"] = "completed"
+            task["result"] = result
 
     except Exception as e:
         logger.error(f"[{task_id}] batch task error: {e}")
@@ -350,10 +276,7 @@ def _run_batch_submit_by_id(task_id: str, alpha_ids: list[str], account: str, us
     if not task:
         return
 
-    total = len(alpha_ids)
-    task["total"] = total
     task["completed"] = 0
-    task["sub_results"] = {}
 
     try:
         client = get_client(account)
@@ -364,72 +287,36 @@ def _run_batch_submit_by_id(task_id: str, alpha_ids: list[str], account: str, us
             return
 
         task["status"] = "running"
-        active_count = 0
-        sc_fail_count = 0
-        timeout_count = 0
 
-        for i, alpha_id in enumerate(alpha_ids):
-            if task.get("cancelled"):
-                task["status"] = "cancelled"
-                break
+        def on_progress(current, total, aid):
+            task["progress_message"] = f"[{current}/{total}] submitting {aid}"
+            task["completed"] = current
 
-            if i > 0:
-                time.sleep(5)
-
-            task["progress_message"] = f"[{i+1}/{total}] submitting {alpha_id}"
-
-            result = client.submit_alpha(alpha_id)
-            platform_status = result.get("platform_status", "")
-            sc_value = result.get("sc_value")
-            sc_limit = result.get("sc_limit")
-
-            sub = {
-                "alpha_id": alpha_id,
-                "ok": result.get("ok", False),
-                "detail": result.get("detail", ""),
-                "platform_status": platform_status,
-                "status_code": result.get("status_code"),
-            }
-            if sc_value is not None:
-                sub["sc_value"] = sc_value
-                sub["sc_limit"] = sc_limit
-
-            if result.get("ok"):
-                active_count += 1
-                sub["final_status"] = "ACTIVE"
-            elif "SC FAIL" in result.get("detail", ""):
-                sc_fail_count += 1
-                sub["final_status"] = "SC_FAIL"
-            elif platform_status == "TIMEOUT":
-                timeout_count += 1
-                sub["final_status"] = "SC_PENDING"
-            else:
-                sub["final_status"] = "OTHER_FAIL"
-
-            task["sub_results"][alpha_id] = sub
-            task["completed"] = i + 1
-
+        def on_each_done(aid, entry):
+            task.setdefault("sub_results", {})[aid] = entry
             try:
                 persist_task_to_db(task_id, user_id, task)
             except Exception as e:
                 logger.warning(f"[{task_id}] incremental persist error: {e}")
 
+        result = run_submit_by_ids(
+            client, alpha_ids,
+            on_progress=on_progress,
+            check_cancelled=lambda: task.get("cancelled", False),
+            on_each_done=on_each_done,
+        )
         client.close()
+
+        if task.get("cancelled"):
+            task["status"] = "cancelled"
+        else:
+            task["status"] = "completed"
+            task["result"] = result
 
         logger.info(
             f"[{task_id}] batch submit done: "
-            f"{active_count} ACTIVE, {sc_fail_count} SC_FAIL, {timeout_count} TIMEOUT"
+            f"{result.get('active', 0)} ACTIVE, {result.get('sc_fail', 0)} SC_FAIL, {result.get('timeout', 0)} TIMEOUT"
         )
-
-        task["status"] = "completed"
-        task["result"] = {
-            "total": total,
-            "completed": task["completed"],
-            "active": active_count,
-            "sc_fail": sc_fail_count,
-            "timeout": timeout_count,
-            "sub_results": task["sub_results"],
-        }
 
     except Exception as e:
         logger.error(f"[{task_id}] batch submit error: {e}")
@@ -508,41 +395,9 @@ async def wq_brain_batch_alpha_status(
     if not client.authenticate():
         raise HTTPException(status_code=502, detail="WQ BRAIN 认证失败")
 
-    results = {}
-    for alpha_id in req.alpha_ids:
-        data = client.check_alpha_status(alpha_id)
-        if not data.get("ok"):
-            results[alpha_id] = {"ok": False, "error": data.get("error", "not found")}
-            continue
-
-        is_data = data.get("is", {})
-        checks = is_data.get("checks", [])
-        sc_check = next((c for c in checks if c.get("name") == "SELF_CORRELATION"), None)
-
-        results[alpha_id] = {
-            "ok": True,
-            "status": data.get("status"),
-            "grade": data.get("grade"),
-            "sharpe": _safe_float(is_data.get("sharpe")),
-            "fitness": _safe_float(is_data.get("fitness")),
-            "returns": _safe_float(is_data.get("returns")),
-            "turnover": _safe_float(is_data.get("turnover")),
-            "sc_result": sc_check.get("result") if sc_check else None,
-            "sc_value": sc_check.get("value") if sc_check else None,
-            "dateCreated": data.get("dateCreated"),
-        }
-
+    result = run_check_alphas(client, req.alpha_ids)
     client.close()
-
-    summary = {
-        "total": len(req.alpha_ids),
-        "active": sum(1 for r in results.values() if r.get("status") == "ACTIVE"),
-        "unsubmitted": sum(1 for r in results.values() if r.get("status") == "UNSUBMITTED"),
-        "sc_fail": sum(1 for r in results.values() if r.get("sc_result") == "FAIL"),
-        "sc_pending": sum(1 for r in results.values() if r.get("sc_result") == "PENDING"),
-    }
-
-    return {"summary": summary, "alphas": results}
+    return result
 
 
 # ---- Batch finalize (query real SC results for previously submitted alphas) ----

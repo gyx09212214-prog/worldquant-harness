@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -66,6 +66,14 @@ from ..task_store import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Attach UTC timezone to naive datetimes (SQLite drops tzinfo)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 
 router = APIRouter()
 
@@ -540,7 +548,11 @@ async def list_tasks(
 
     query = select(TaskModel).where(TaskModel.user_id == user.id)
     if session_id is not None:
-        query = query.where(TaskModel.session_id == session_id)
+        import uuid as _uuid
+        try:
+            query = query.where(TaskModel.session_id == _uuid.UUID(session_id))
+        except ValueError:
+            pass
     if task_type is not None:
         query = query.where(TaskModel.task_type == task_type)
     if status is not None:
@@ -565,8 +577,8 @@ async def list_tasks(
                 "expression": dt.expression,
                 "result": dt.result,
                 "error": dt.error,
-                "created_at": dt.created_at.isoformat() if dt.created_at else None,
-                "completed_at": dt.updated_at.isoformat() if dt.status in ("completed", "failed", "cancelled", "iteration_completed") and dt.updated_at else None,
+                "created_at": _ensure_utc(dt.created_at).isoformat() if dt.created_at else None,
+                "completed_at": _ensure_utc(dt.updated_at).isoformat() if dt.status in ("completed", "failed", "cancelled", "iteration_completed") and dt.updated_at else None,
                 "duration_seconds": dur,
             }
             if rating is not None:
