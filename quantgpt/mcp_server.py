@@ -156,7 +156,7 @@ async def run_backtest(
     Returns:
         JSON string with report_path, metrics, group_returns, anti_overfit.
     """
-    task_id = start_mcp_task("backtest", expression, {
+    task_id = await start_mcp_task("backtest", expression, {
         "universe": universe, "start_date": start_date, "end_date": end_date,
         "n_groups": n_groups, "holding_period": holding_period, "benchmark": benchmark,
         "neutralize_industry": neutralize_industry, "neutralize_cap": neutralize_cap,
@@ -243,7 +243,7 @@ async def run_backtest(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -278,7 +278,7 @@ async def score_factor(
     """
     from .iteration import compute_factor_score
 
-    task_id = start_mcp_task("score", expression, {
+    task_id = await start_mcp_task("score", expression, {
         "universe": universe, "start_date": start_date, "end_date": end_date,
         "n_groups": n_groups, "holding_period": holding_period, "benchmark": benchmark,
     })
@@ -347,7 +347,7 @@ async def score_factor(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -436,7 +436,7 @@ async def run_anti_overfit(
     """
     from .anti_overfit import run_anti_overfit as _run_ao
 
-    task_id = start_mcp_task("anti_overfit", expression, {
+    task_id = await start_mcp_task("anti_overfit", expression, {
         "universe": universe, "start_date": start_date, "end_date": end_date,
         "holding_period": holding_period,
     })
@@ -468,7 +468,7 @@ async def run_anti_overfit(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -500,7 +500,7 @@ async def run_rolling_validation(
     """
     from .rolling_validator import run_rolling_validation as _run_rv
 
-    task_id = start_mcp_task("rolling_validation", expression, {
+    task_id = await start_mcp_task("rolling_validation", expression, {
         "universe": universe, "start_date": start_date, "end_date": end_date,
         "holding_period": holding_period,
     })
@@ -532,7 +532,7 @@ async def run_rolling_validation(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -578,7 +578,7 @@ async def wq_brain_submit(
         except (TypeError, ValueError):
             return None
 
-    task_id = start_mcp_task("wq_brain_submit", expression, {
+    task_id = await start_mcp_task("wq_brain_submit", expression, {
         "expression": expression, "tag": tag, "region": region, "universe": universe,
         "delay": delay, "decay": decay, "neutralization": neutralization,
         "truncation": truncation, "auto_submit": auto_submit,
@@ -660,7 +660,7 @@ async def wq_brain_submit(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -709,7 +709,7 @@ async def wq_brain_batch_submit(
     universes = universes or ["TOP3000"]
     neutralizations = neutralizations or ["SUBINDUSTRY"]
 
-    task_id = start_mcp_task("wq_brain_batch", expression, {
+    task_id = await start_mcp_task("wq_brain_batch", expression, {
         "expression": expression, "tag": tag,
         "regions": regions, "delays": delays, "universes": universes,
         "neutralizations": neutralizations, "decay": decay, "truncation": truncation,
@@ -822,7 +822,7 @@ async def wq_brain_batch_submit(
         _error_msg = str(e)
         return json.dumps({"error": str(e)})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg, expression)
+        await complete_mcp_task(task_id, _result, _error_msg, expression)
 
 
 @mcp.tool()
@@ -851,46 +851,61 @@ async def wq_brain_submit_by_ids(
     if len(alpha_ids) > 50:
         return json.dumps({"error": f"alpha_ids 数量 {len(alpha_ids)} 超过上限 50"})
 
-    client = WQBrainClient()
-    authenticated = await asyncio.to_thread(client.authenticate)
-    if not authenticated:
-        return json.dumps({"error": "WQ BRAIN 认证失败"})
+    task_id = await start_mcp_task(
+        "wq_brain_submit_by_ids",
+        ", ".join(alpha_ids[:5]) + ("..." if len(alpha_ids) > 5 else ""),
+        {"alpha_ids": alpha_ids, "account": account},
+    )
+    _result = None
+    _error_msg = None
 
-    results = {}
-    active = 0
-    sc_fail = 0
-    timeout = 0
+    try:
+        client = WQBrainClient()
+        authenticated = await asyncio.to_thread(client.authenticate)
+        if not authenticated:
+            _error_msg = "WQ BRAIN 认证失败"
+            return json.dumps({"error": _error_msg})
 
-    for alpha_id in alpha_ids:
-        result = await asyncio.to_thread(client.submit_alpha, alpha_id)
-        entry = {
-            "ok": result.get("ok", False),
-            "detail": result.get("detail", ""),
-            "platform_status": result.get("platform_status", ""),
+        results = {}
+        active = 0
+        sc_fail = 0
+        timeout = 0
+
+        for alpha_id in alpha_ids:
+            result = await asyncio.to_thread(client.submit_alpha, alpha_id)
+            entry = {
+                "ok": result.get("ok", False),
+                "detail": result.get("detail", ""),
+                "platform_status": result.get("platform_status", ""),
+            }
+            if result.get("sc_value") is not None:
+                entry["sc_value"] = result["sc_value"]
+                entry["sc_limit"] = result.get("sc_limit")
+
+            if result.get("ok"):
+                active += 1
+            elif "SC FAIL" in result.get("detail", ""):
+                sc_fail += 1
+            elif result.get("platform_status") == "TIMEOUT":
+                timeout += 1
+
+            results[alpha_id] = entry
+
+        await asyncio.to_thread(client.close)
+
+        _result = {
+            "total": len(alpha_ids),
+            "active": active,
+            "sc_fail": sc_fail,
+            "timeout": timeout,
+            "results": results,
         }
-        if result.get("sc_value") is not None:
-            entry["sc_value"] = result["sc_value"]
-            entry["sc_limit"] = result.get("sc_limit")
-
-        if result.get("ok"):
-            active += 1
-        elif "SC FAIL" in result.get("detail", ""):
-            sc_fail += 1
-        elif result.get("platform_status") == "TIMEOUT":
-            timeout += 1
-
-        results[alpha_id] = entry
-
-    await asyncio.to_thread(client.close)
-
-    output = {
-        "total": len(alpha_ids),
-        "active": active,
-        "sc_fail": sc_fail,
-        "timeout": timeout,
-        "results": results,
-    }
-    return json.dumps(output, ensure_ascii=False, indent=2, default=str)
+        return json.dumps(_result, ensure_ascii=False, indent=2, default=str)
+    except Exception as e:
+        _error_msg = str(e)
+        return json.dumps({"error": _error_msg})
+    finally:
+        await complete_mcp_task(task_id, _result, _error_msg)
 
 
 @mcp.tool()
@@ -1062,7 +1077,7 @@ async def wq_brain_finalize_submissions(
     Returns:
         JSON: per-alpha final_status (ACTIVE/SC_FAIL/SC_PENDING/ERROR) + summary
     """
-    task_id = start_mcp_task("wq_brain_finalize", ",".join(alpha_ids[:5]), {
+    task_id = await start_mcp_task("wq_brain_finalize", ",".join(alpha_ids[:5]), {
         "alpha_ids": alpha_ids[:10], "account": account, "total": len(alpha_ids),
     })
     _error_msg = None
@@ -1094,7 +1109,7 @@ async def wq_brain_finalize_submissions(
         logger.error(f"MCP wq_brain_finalize error: {e}")
         return json.dumps({"error": f"Finalize failed: {e}"})
     finally:
-        complete_mcp_task(task_id, _result, _error_msg)
+        await complete_mcp_task(task_id, _result, _error_msg)
 
 
 # Operator documentation fallback

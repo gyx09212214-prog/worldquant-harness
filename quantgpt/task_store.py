@@ -133,67 +133,77 @@ REPORT_DIR = Path(__file__).resolve().parent.parent / "reports"
 SAFE_FILENAME_RE = re.compile(r"^backtest_report_[\w]+\.html$")
 
 
-def persist_task_to_db(task_id: str, user_id: str, task_data: dict, report_filename: str | None = None):
+async def _persist_task_impl(task_id: str, user_id: str, task_data: dict, report_filename: str | None = None):
+    """Core async implementation of task persistence."""
     from .db import _get_session_factory
 
-    async def _do_persist():
-        factory = _get_session_factory()
-        async with factory() as session:
-            try:
-                raw_session_id = task_data.get("session_id")
-                session_id = uuid_mod.UUID(raw_session_id) if isinstance(raw_session_id, str) else raw_session_id
-                real_created = task_data.get("created_at")
-                real_completed = task_data.get("completed_at")
-                ts_created = None
-                ts_completed = None
-                if isinstance(real_created, (int, float)):
-                    ts_created = datetime.fromtimestamp(real_created, tz=timezone.utc)
-                if isinstance(real_completed, (int, float)):
-                    ts_completed = datetime.fromtimestamp(real_completed, tz=timezone.utc)
+    factory = _get_session_factory()
+    async with factory() as session:
+        try:
+            raw_session_id = task_data.get("session_id")
+            session_id = uuid_mod.UUID(raw_session_id) if isinstance(raw_session_id, str) else raw_session_id
+            real_created = task_data.get("created_at")
+            real_completed = task_data.get("completed_at")
+            ts_created = None
+            ts_completed = None
+            if isinstance(real_created, (int, float)):
+                ts_created = datetime.fromtimestamp(real_created, tz=timezone.utc)
+            if isinstance(real_completed, (int, float)):
+                ts_completed = datetime.fromtimestamp(real_completed, tz=timezone.utc)
 
-                task_record = TaskModel(
-                    id=task_id,
+            task_record = TaskModel(
+                id=task_id,
+                user_id=uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id,
+                session_id=session_id,
+                status=task_data.get("status", "failed"),
+                task_type=task_data.get("task_type", "backtest"),
+                params=task_data.get("params"),
+                expression=task_data.get("expression"),
+                result=task_data.get("result"),
+                error=task_data.get("error"),
+            )
+            if ts_created:
+                task_record.created_at = ts_created
+            if ts_completed:
+                task_record.updated_at = ts_completed
+            await session.merge(task_record)
+
+            if report_filename:
+                report_record = ReportModel(
                     user_id=uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id,
-                    session_id=session_id,
-                    status=task_data.get("status", "failed"),
-                    task_type=task_data.get("task_type", "backtest"),
-                    params=task_data.get("params"),
-                    expression=task_data.get("expression"),
-                    result=task_data.get("result"),
-                    error=task_data.get("error"),
+                    task_id=task_id,
+                    filename=report_filename,
                 )
-                if ts_created:
-                    task_record.created_at = ts_created
-                if ts_completed:
-                    task_record.updated_at = ts_completed
-                await session.merge(task_record)
+                session.add(report_record)
 
-                if report_filename:
-                    report_record = ReportModel(
-                        user_id=uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id,
-                        task_id=task_id,
-                        filename=report_filename,
-                    )
-                    session.add(report_record)
+            if session_id:
+                result = await session.execute(
+                    select(SessionModel).where(SessionModel.id == session_id)
+                )
+                sess_record = result.scalar_one_or_none()
+                if sess_record and not sess_record.name:
+                    prompt = (task_data.get("params") or {}).get("prompt", "")
+                    if prompt:
+                        sess_record.name = prompt[:30]
 
-                if session_id:
-                    result = await session.execute(
-                        select(SessionModel).where(SessionModel.id == session_id)
-                    )
-                    sess_record = result.scalar_one_or_none()
-                    if sess_record and not sess_record.name:
-                        prompt = (task_data.get("params") or {}).get("prompt", "")
-                        if prompt:
-                            sess_record.name = prompt[:30]
+            await session.commit()
+            logger.info(f"[{task_id}] persisted to DB")
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"[{task_id}] DB persist failed: {e}")
 
-                await session.commit()
-                logger.info(f"[{task_id}] persisted to DB")
-            except Exception as e:
-                await session.rollback()
-                logger.error(f"[{task_id}] DB persist failed: {e}")
 
+async def persist_task_to_db_async(task_id: str, user_id: str, task_data: dict, report_filename: str | None = None):
+    """Async version — use from async (MCP) context. Never deadlocks."""
+    await _persist_task_impl(task_id, user_id, task_data, report_filename)
+
+
+def persist_task_to_db(task_id: str, user_id: str, task_data: dict, report_filename: str | None = None):
+    """Sync wrapper — use from sync (HTTP route background) context only."""
     if main_loop and main_loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(_do_persist(), main_loop)
+        future = asyncio.run_coroutine_threadsafe(
+            _persist_task_impl(task_id, user_id, task_data, report_filename), main_loop
+        )
         try:
             future.result(timeout=30)
         except Exception as e:
@@ -201,7 +211,7 @@ def persist_task_to_db(task_id: str, user_id: str, task_data: dict, report_filen
     else:
         def _run():
             try:
-                asyncio.run(_do_persist())
+                asyncio.run(_persist_task_impl(task_id, user_id, task_data, report_filename))
             except Exception as e:
                 logger.error(f"[{task_id}] DB persist thread error: {e}")
         t = threading.Thread(target=_run, daemon=True)

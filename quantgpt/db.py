@@ -21,6 +21,10 @@ def _get_engine():
         if "postgresql" in url:
             kwargs["pool_size"] = 5
             kwargs["max_overflow"] = 10
+        elif "sqlite" in url:
+            from sqlalchemy.pool import StaticPool
+            kwargs["connect_args"] = {"check_same_thread": False}
+            kwargs["poolclass"] = StaticPool
         _engine = create_async_engine(url, **kwargs)
     return _engine
 
