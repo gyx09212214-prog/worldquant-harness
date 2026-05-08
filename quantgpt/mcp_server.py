@@ -565,7 +565,7 @@ async def wq_brain_submit(
     Args:
         expression: FASTEXPR 表达式 (如 "rank(close/open)")
         tag: 提交者标识 (如 "agent-lowcorr-0506")，用于追踪哪个 agent 提交
-        region: 市场区域 (USA, CHN 等)
+        region: 市场区域 (当前仅 USA 可用)
         universe: WQ Universe (TOP3000, TOP500 等)
         delay: 信号延迟 (0 或 1)
         decay: Alpha 衰减 (0-20)

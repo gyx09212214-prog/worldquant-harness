@@ -69,7 +69,7 @@ class TestBatchSubmitValidation:
             resp = await client.post("/api/v1/wq-brain/batch-submit", json={
                 "expression": "rank(close)",
                 "tag": "test-agent",
-                "regions": ["USA", "CHN"],
+                "regions": ["USA"],
                 "delays": [0, 1],
                 "universes": ["TOP3000", "TOP1000", "TOP500", "TOP200"],
                 "neutralizations": ["MARKET", "SUBINDUSTRY", "INDUSTRY", "SECTOR", "NONE"],
@@ -98,14 +98,14 @@ class TestBatchSubmitCreatesTask:
                 resp = await client.post("/api/v1/wq-brain/batch-submit", json={
                     "expression": "rank(close/open)",
                     "tag": "test-agent",
-                    "regions": ["USA", "CHN"],
+                    "regions": ["USA"],
                     "delays": [0, 1],
                     "universes": ["TOP3000"],
                     "neutralizations": ["SUBINDUSTRY", "MARKET"],
                 }, headers=auth_headers)
                 assert resp.status_code == 202
                 data = resp.json()
-                assert data["total_combinations"] == 2 * 2 * 1 * 2
+                assert data["total_combinations"] == 1 * 2 * 1 * 2
 
 
 class TestBatchRequestModel:
@@ -126,13 +126,13 @@ class TestBatchRequestModel:
         req = WQBrainBatchRequest(
             expression="ts_mean(close, 5)",
             tag="test-sweep",
-            regions=["USA", "CHN"],
+            regions=["USA"],
             delays=[0, 1],
             decay=5,
             truncation=0.1,
             auto_submit=True,
         )
-        assert req.regions == ["USA", "CHN"]
+        assert req.regions == ["USA"]
         assert req.delays == [0, 1]
         assert req.decay == 5
         assert req.auto_submit is True

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/wq-brain", tags=["wq_brain_batch"])
 
-VALID_REGIONS = {"USA", "CHN"}
+VALID_REGIONS = {"USA"}
 VALID_UNIVERSES = {"TOP3000", "TOP1000", "TOP500", "TOP200"}
 VALID_NEUTRALIZATIONS = {"MARKET", "SUBINDUSTRY", "INDUSTRY", "SECTOR", "NONE"}
 MAX_COMBINATIONS = 36
