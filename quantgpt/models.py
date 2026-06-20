@@ -176,6 +176,117 @@ class SubmittedAlpha(Base):
     )
 
 
+class WQAlphaExperiment(Base):
+    __tablename__ = "wq_alpha_experiments"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=True, index=True)
+    alpha_id = Column(String(50), nullable=True, index=True)
+    expression = Column(Text, nullable=False)
+    expression_normalized = Column(Text, nullable=False)
+    expression_hash = Column(String(64), nullable=False, index=True)
+    params_hash = Column(String(64), nullable=False, index=True)
+
+    account = Column(String(50), nullable=False, default="primary")
+    region = Column(String(10), nullable=False, default="USA")
+    universe = Column(String(20), nullable=False, default="TOP3000")
+    delay = Column(Integer, nullable=False, default=1)
+    decay = Column(Integer, nullable=False, default=0)
+    neutralization = Column(String(30), nullable=False, default="SUBINDUSTRY")
+    truncation = Column(Float, nullable=False, default=0.08)
+
+    source_type = Column(String(50), nullable=True)
+    source_family = Column(String(100), nullable=True)
+    source_run_id = Column(String(200), nullable=True, index=True)
+    source_file = Column(String(500), nullable=True)
+    source_tag = Column(String(100), nullable=True)
+    parent_experiment_id = Column(Uuid, nullable=True)
+    candidate_meta = Column(JSON, nullable=True)
+
+    lifecycle_status = Column(String(40), nullable=False, default="candidate", index=True)
+    submit_eligible = Column(Boolean, nullable=True)
+    non_correlation_pass = Column(Boolean, nullable=True)
+    api_check_status = Column(String(50), nullable=True, index=True)
+    platform_status = Column(String(50), nullable=True)
+    review_failure_kind = Column(String(50), nullable=True)
+
+    sharpe = Column(Float, nullable=True)
+    fitness = Column(Float, nullable=True, index=True)
+    returns = Column(Float, nullable=True)
+    turnover = Column(Float, nullable=True)
+    drawdown = Column(Float, nullable=True)
+    margin = Column(Float, nullable=True)
+    long_count = Column(Integer, nullable=True)
+    short_count = Column(Integer, nullable=True)
+    grade = Column(String(30), nullable=True)
+
+    self_correlation_result = Column(String(30), nullable=True)
+    self_correlation_value = Column(Float, nullable=True)
+    self_correlation_limit = Column(Float, nullable=True)
+    prod_correlation_result = Column(String(30), nullable=True)
+    prod_correlation_value = Column(Float, nullable=True)
+    prod_correlation_limit = Column(Float, nullable=True)
+
+    max_similarity_to_blocked = Column(Float, nullable=True)
+    max_similarity_to_hits = Column(Float, nullable=True)
+    nearest_blocked_alpha_id = Column(String(50), nullable=True)
+    nearest_blocked_expression = Column(Text, nullable=True)
+    nearest_blocked_source = Column(String(100), nullable=True)
+    similarity_details = Column(JSON, nullable=True)
+
+    failure_kind = Column(String(50), nullable=True, index=True)
+    failure_reasons = Column(JSON, nullable=True)
+    raw_result = Column(JSON, nullable=True)
+    raw_api_check = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+
+    __table_args__ = (
+        Index("ix_wq_alpha_experiments_expr_params_run", "expression_hash", "params_hash", "source_run_id"),
+        Index("ix_wq_alpha_experiments_status_fitness", "lifecycle_status", "fitness"),
+        Index("ix_wq_alpha_experiments_source_family", "source_family", "created_at"),
+    )
+
+
+class WQFailureMemory(Base):
+    __tablename__ = "wq_failure_memory"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=True, index=True)
+    experiment_id = Column(Uuid, nullable=True, index=True)
+
+    memory_type = Column(String(40), nullable=False, index=True)
+    scope = Column(String(100), nullable=False, default="global")
+    expression = Column(Text, nullable=True)
+    expression_normalized = Column(Text, nullable=True)
+    expression_hash = Column(String(64), nullable=True, index=True)
+    pattern_signature = Column(String(500), nullable=True, index=True)
+    fields = Column(JSON, nullable=True)
+    operators = Column(JSON, nullable=True)
+    params = Column(JSON, nullable=True)
+
+    failure_kind = Column(String(50), nullable=False, index=True)
+    severity = Column(String(20), nullable=False, default="note", index=True)
+    confidence = Column(Float, nullable=False, default=1.0)
+    evidence_count = Column(Integer, nullable=False, default=1)
+    evidence = Column(JSON, nullable=True)
+    source_experiment_ids = Column(JSON, nullable=True)
+
+    first_seen_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    user = relationship("User")
+
+    __table_args__ = (
+        Index("ix_wq_failure_memory_kind_severity", "failure_kind", "severity"),
+        Index("ix_wq_failure_memory_type_kind", "memory_type", "failure_kind", "severity"),
+    )
+
+
 class DailySummary(Base):
     __tablename__ = "daily_summaries"
 

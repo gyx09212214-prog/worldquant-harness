@@ -16,7 +16,7 @@ _session_factory = None
 def _get_engine():
     global _engine
     if _engine is None:
-        url = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./quantgpt.db")
+        url = os.environ.get("DATABASE_URL") or "sqlite+aiosqlite:///./quantgpt.db"
         kwargs: dict = {"echo": False}
         if "postgresql" in url:
             kwargs["pool_size"] = 5

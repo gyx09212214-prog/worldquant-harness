@@ -148,6 +148,12 @@ _WQ_FUNDAMENTAL_FIELDS = {
     'total_debt', 'cash_and_equivalents', 'accounts_receivable',
     'inventory', 'goodwill', 'intangibles', 'shares_outstanding',
     'enterprise_value', 'net_debt',
+    'actual_sales_value_quarterly', 'actual_sales_value_annual',
+    'actual_cashflow_per_share_value_quarterly', 'actual_dividend_value_quarterly',
+    'bookvalue_ps', 'cashflow', 'cashflow_op', 'cashflow_dividends',
+    'cashflow_fin', 'cashflow_invst', 'dividend', 'dividends_to_gross_profit',
+    'forward_sales_to_price', 'forward_book_value_to_price',
+    'forward_cash_flow_to_price',
 }
 
 _WQ_ANALYST_FIELDS = {
@@ -155,6 +161,9 @@ _WQ_ANALYST_FIELDS = {
     'price_target', 'recommendation',
     'fam_score', 'fam_growth', 'fam_value', 'fam_quality', 'fam_sentiment',
     'fam_roe_rank', 'fam_growth_rank', 'fam_value_rank',
+    'actual_eps_value_quarterly', 'anl4_af_eps_value', 'anl4_af_cfps_value',
+    'anl4_adjusted_netincome_ft', 'anl4_afv4_div_median',
+    'anl4_afv4_eps_mean', 'earnings_momentum_composite_score',
 }
 
 _WQ_MDF_FIELDS = {
@@ -166,6 +175,11 @@ _WQ_MDF_FIELDS = {
 _WQ_NEWS_SENTIMENT_FIELDS = {
     'snt_buzz', 'snt_buzz_ret', 'snt_bullish', 'snt_bearish',
     'snt_sentiment', 'snt_volume', 'snt_score',
+    'sentiment1', 'scl12_sentiment', 'scl12_sentiment_fast_d1',
+    'snt1_cored1_score', 'snt1_d1_dynamicfocusrank',
+    'snt1_d1_fundamentalfocusrank', 'snt1_d1_stockrank',
+    'snt1_d1_earningsrevision', 'snt1_d1_netearningsrevision',
+    'snt1_d1_analystcoverage',
 }
 
 _WQ_OPTIONS_FIELDS = {
@@ -173,6 +187,9 @@ _WQ_OPTIONS_FIELDS = {
     'implied_volatility', 'implied_volatility_call', 'implied_volatility_put',
     'implied_volatility_slope', 'implied_volatility_skew',
     'option_volume', 'open_interest',
+    'pcr_vol_10', 'pcr_oi_10', 'implied_volatility_mean_30',
+    'implied_volatility_call_90', 'implied_volatility_put_90',
+    'implied_volatility_call_120', 'implied_volatility_put_120',
 }
 
 _WQ_RELATIONSHIP_FIELDS = {
@@ -527,7 +544,10 @@ class ExpressionParser:
             if max_args is not None and len(parts) > max_args:
                 raise ValueError(f"{func_name} 最多 {max_args} 个参数: {usage}")
             for p in parts:
-                self._sub_parse(p.strip())
+                p_stripped = p.strip()
+                if func_name == 'bucket' and re.match(r'^(range|buckets)\s*=', p_stripped):
+                    continue
+                self._sub_parse(p_stripped)
             def _wq_remote_stub(df, _name=func_name):
                 raise RuntimeError(f"算子 '{_name}' 仅支持 WQ BRAIN 远程执行，不可本地计算")
             return _wq_remote_stub
@@ -852,7 +872,11 @@ class ExpressionParser:
         # Column reference — only allow known columns (case-insensitive)
         col_name = expr_lower.strip()
         from .fundamental_data import ALL_FUNDAMENTAL_NAMES
-        _PRICE_COLUMNS = {'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change', 'market_cap', 'shares'}
+        _PRICE_COLUMNS = {
+            'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change',
+            'market_cap', 'float_market_cap', 'shares', 'turnover_rate',
+            'net_income', 'cash_flow', 'revenue',
+        }
         _ALLOWED_COLUMNS = _PRICE_COLUMNS | ALL_FUNDAMENTAL_NAMES
         _ALIAS_MAP = {
             'pe_ratio': 'pe', 'pe_ttm': 'pe', 'pb_ratio': 'pb', 'ps_ratio': 'ps',
@@ -932,12 +956,25 @@ class ExpressionParser:
 
     @staticmethod
     def _split_top_level(s: str) -> list:
-        """Split a string by commas at the top level (outside parentheses)."""
+        """Split a string by commas at the top level (outside parentheses/quotes)."""
         parts = []
         depth = 0
+        quote = None
+        escaped = False
         current = []
         for ch in s:
-            if ch == '(':
+            if quote:
+                current.append(ch)
+                if escaped:
+                    escaped = False
+                elif ch == '\\':
+                    escaped = True
+                elif ch == quote:
+                    quote = None
+            elif ch in {'"', "'"}:
+                quote = ch
+                current.append(ch)
+            elif ch == '(':
                 depth += 1
                 current.append(ch)
             elif ch == ')':

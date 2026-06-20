@@ -64,6 +64,28 @@ async def record_submitted_alpha(
                 tag=tag,
             )
             session.add(record)
+            try:
+                from .wq_alpha_ledger import record_submitted_alpha_in_ledger
+                await record_submitted_alpha_in_ledger(
+                    session,
+                    user_id=uid,
+                    alpha_id=alpha_id,
+                    expression=expression,
+                    region=region,
+                    universe=universe,
+                    delay=delay,
+                    decay=decay,
+                    neutralization=neutralization,
+                    truncation=truncation,
+                    sharpe=sharpe,
+                    fitness=fitness,
+                    returns=returns,
+                    turnover=turnover,
+                    tag=tag,
+                    status="submitted",
+                )
+            except Exception as e:
+                logger.warning(f"Failed to mirror submitted alpha into WQ ledger: {e}")
             await session.commit()
             logger.info(f"Recorded submitted alpha: {alpha_id}")
         except Exception as e:
@@ -107,6 +129,24 @@ async def update_submitted_alpha_status(alpha_id: str, new_status: str):
             record = result.scalar_one_or_none()
             if record:
                 record.status = new_status
+                try:
+                    from .models import WQAlphaExperiment
+
+                    mapped = {
+                        "active": "active",
+                        "submitted": "submitted",
+                        "sc_fail": "self_corr_fail",
+                        "self_corr_fail": "self_corr_fail",
+                        "prod_corr_fail": "prod_corr_fail",
+                    }.get(str(new_status or "").lower())
+                    if mapped:
+                        result = await session.execute(
+                            select(WQAlphaExperiment).where(WQAlphaExperiment.alpha_id == alpha_id)
+                        )
+                        for exp in result.scalars().all():
+                            exp.lifecycle_status = mapped
+                except Exception as e:
+                    logger.warning(f"Failed to mirror alpha status into WQ ledger: {e}")
                 await session.commit()
                 logger.info(f"Updated SubmittedAlpha {alpha_id} status to {new_status}")
             else:

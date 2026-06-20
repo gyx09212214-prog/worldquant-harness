@@ -1,12 +1,12 @@
 """Tests for wq_brain_client.py and routes/wq_brain.py."""
 
 import os
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from quantgpt.wq_brain_client import SUBMIT_THRESHOLDS, WQBrainClient, configured_accounts, get_client, is_configured
+from quantgpt.wq_brain_client import WQBrainClient, configured_accounts, get_client, is_configured
+from quantgpt.wq_brain_service import submit_threshold_checks
 
 pytestmark = pytest.mark.asyncio
 
@@ -109,6 +109,33 @@ class TestWQBrainClient:
         c._session = mock_session
         assert c.authenticate() is False
 
+    async def test_list_data_fields_uses_wq_params(self):
+        c = WQBrainClient(email="a@b.com", password="pw")
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": []}
+        mock_session.get.return_value = mock_resp
+        c._session = mock_session
+
+        result = c.list_data_fields(region="USA", universe="TOP3000", delay=1, dataset_id="pv1", limit=10)
+
+        assert result["ok"] is True
+        _, kwargs = mock_session.get.call_args
+        assert kwargs["params"]["dataset.id"] == "pv1"
+        assert kwargs["params"]["limit"] == 10
+
+
+class TestSubmitThresholds:
+    async def test_submit_thresholds_pass(self):
+        result = submit_threshold_checks({"sharpe": 1.5, "fitness": 1.1, "turnover": 0.2})
+        assert result["eligible"] is True
+
+    async def test_submit_thresholds_reject_turnover(self):
+        result = submit_threshold_checks({"sharpe": 2.0, "fitness": 1.5, "turnover": 0.9})
+        assert result["eligible"] is False
+        assert result["checks"]["turnover_max"] is False
+
 
 class TestWQBrainStatusEndpoint:
     async def test_status_returns_config(self, client):
@@ -137,16 +164,18 @@ class TestWQBrainSubmitEndpoint:
             assert resp.status_code == 503
 
     async def test_submit_creates_task(self, client, test_user, auth_headers):
-        with patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}, clear=False):
-            with patch("quantgpt.routes.wq_brain._run_wq_brain_task"):
-                resp = await client.post("/api/v1/wq-brain/submit", json={
-                    "expression": "rank(close)",
-                    "tag": "test-agent",
-                }, headers=auth_headers)
-                assert resp.status_code == 202
-                data = resp.json()
-                assert "task_id" in data
-                assert data["status"] == "pending"
+        with (
+            patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}, clear=False),
+            patch("quantgpt.routes.wq_brain._run_wq_brain_task"),
+        ):
+            resp = await client.post("/api/v1/wq-brain/submit", json={
+                "expression": "rank(close)",
+                "tag": "test-agent",
+            }, headers=auth_headers)
+            assert resp.status_code == 202
+            data = resp.json()
+            assert "task_id" in data
+            assert data["status"] == "pending"
 
 
 class TestSubmittedAlphasEndpoint:

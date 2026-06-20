@@ -28,6 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 postgresql = ["asyncpg>=0.29"]
 celery = ["celery[redis]>=5.3"]
+community = ["playwright>=1.44"]
 dev = ["ruff>=0.4", "pyright>=1.1", "pytest>=8.0", "pytest-asyncio>=0.23", "pytest-cov>=5.0", "pip-audit>=2.7"]
 
 [build-system]

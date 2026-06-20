@@ -1,0 +1,30 @@
+{
+  "target_ready": 10,
+  "target_sim_hits": 20,
+  "cycles": 2,
+  "max_runs": 120,
+  "pending_limit": 50,
+  "platform_sync_limit": 400,
+  "check_chunk_size": 1,
+  "check_delay_seconds": 0,
+  "account": "primary",
+  "region": "USA",
+  "universe": "TOP3000",
+  "delay": 1,
+  "decay": 6,
+  "neutralization": "SUBINDUSTRY",
+  "truncation": 0.08,
+  "similarity_threshold": 0.82,
+  "hit_similarity_threshold": 0.82,
+  "ledger_similarity_threshold": 0.7,
+  "use_ledger": true,
+  "sync_platform": true,
+  "recheck_pending": true,
+  "mine": true,
+  "check_hits": true,
+  "candidate_files": [
+    "scripts/local_seed_expressions.json",
+    "reports/wq_community_triage_full_20260514/community_wq_candidates.jsonl"
+  ],
+  "pending_inputs": []
+}

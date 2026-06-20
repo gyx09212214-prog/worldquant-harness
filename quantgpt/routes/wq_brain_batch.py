@@ -28,6 +28,7 @@ from ..wq_brain_service import (
     run_submit_by_ids,
     safe_float,
 )
+from ..wq_review import parse_review_checks, primary_failure_kind, review_has_pending_correlation
 
 logger = logging.getLogger(__name__)
 
@@ -91,18 +92,23 @@ def _classify_alpha_check(data: dict) -> dict:
 
     status = (data.get("status") or "").upper()
     is_data = data.get("is", {})
-    checks = is_data.get("checks", [])
-    sc_check = next((c for c in checks if c.get("name") == "SELF_CORRELATION"), None)
-    sc_result = sc_check.get("result") if sc_check else None
+    review_checks = data.get("review_checks") or parse_review_checks(data)
+    failure_kind = primary_failure_kind(review_checks)
+    sc_check = review_checks.get("self_correlation", {})
+    prod_check = review_checks.get("prod_correlation", {})
+    sc_result = sc_check.get("result")
+    prod_result = prod_check.get("result")
 
     if status == "ACTIVE":
         final = "ACTIVE"
-    elif sc_result == "FAIL":
+    elif failure_kind == "prod_correlation":
+        final = "PROD_CORR_FAIL"
+    elif failure_kind == "self_correlation":
         final = "SC_FAIL"
     elif status == "UNSUBMITTED":
         final = "UNSUBMITTED"
-    elif sc_result == "PENDING" or sc_result is None:
-        final = "SC_PENDING"
+    elif review_has_pending_correlation(review_checks) or sc_result is None:
+        final = "CORR_PENDING"
     else:
         final = "OTHER_FAIL"
 
@@ -110,8 +116,12 @@ def _classify_alpha_check(data: dict) -> dict:
         "final_status": final,
         "status": status,
         "sc_result": sc_result,
-        "sc_value": sc_check.get("value") if sc_check else None,
-        "sc_limit": sc_check.get("limit") if sc_check else None,
+        "sc_value": sc_check.get("value"),
+        "sc_limit": sc_check.get("limit"),
+        "prod_corr_result": prod_result,
+        "prod_corr_value": prod_check.get("value"),
+        "prod_corr_limit": prod_check.get("limit"),
+        "review_checks": review_checks,
         "fitness": _safe_float(is_data.get("fitness")),
         "sharpe": _safe_float(is_data.get("sharpe")),
         "grade": data.get("grade"),
@@ -121,7 +131,17 @@ def _classify_alpha_check(data: dict) -> dict:
 def _finalize_alpha_statuses(client, alpha_ids: list[str], user_id: str | None = None) -> dict:
     """Query platform for real SC results and update DB for resolved alphas."""
     results = {}
-    summary = {"total": len(alpha_ids), "resolved": 0, "active": 0, "sc_fail": 0, "sc_pending": 0, "unsubmitted": 0, "error": 0}
+    summary = {
+        "total": len(alpha_ids),
+        "resolved": 0,
+        "active": 0,
+        "sc_fail": 0,
+        "prod_corr_fail": 0,
+        "corr_pending": 0,
+        "sc_pending": 0,
+        "unsubmitted": 0,
+        "error": 0,
+    }
 
     for alpha_id in alpha_ids:
         data = client.check_alpha_status(alpha_id)
@@ -132,19 +152,23 @@ def _finalize_alpha_statuses(client, alpha_ids: list[str], user_id: str | None =
         if fs == "ACTIVE":
             summary["active"] += 1
             summary["resolved"] += 1
+        elif fs == "PROD_CORR_FAIL":
+            summary["prod_corr_fail"] += 1
+            summary["resolved"] += 1
         elif fs == "SC_FAIL":
             summary["sc_fail"] += 1
             summary["resolved"] += 1
         elif fs == "UNSUBMITTED":
             summary["unsubmitted"] += 1
-        elif fs == "SC_PENDING":
+        elif fs in ("CORR_PENDING", "SC_PENDING"):
+            summary["corr_pending"] += 1
             summary["sc_pending"] += 1
         elif fs == "ERROR":
             summary["error"] += 1
         else:
             summary["resolved"] += 1
 
-        if user_id and fs in ("ACTIVE", "SC_FAIL"):
+        if user_id and fs in ("ACTIVE", "SC_FAIL", "PROD_CORR_FAIL"):
             try:
                 from ..alpha_tracker import update_submitted_alpha_status_sync
                 update_submitted_alpha_status_sync(alpha_id, fs.lower())
@@ -315,7 +339,8 @@ def _run_batch_submit_by_id(task_id: str, alpha_ids: list[str], account: str, us
 
         logger.info(
             f"[{task_id}] batch submit done: "
-            f"{result.get('active', 0)} ACTIVE, {result.get('sc_fail', 0)} SC_FAIL, {result.get('timeout', 0)} TIMEOUT"
+            f"{result.get('active', 0)} ACTIVE, {result.get('sc_fail', 0)} SC_FAIL, "
+            f"{result.get('prod_corr_fail', 0)} PROD_CORR_FAIL, {result.get('timeout', 0)} TIMEOUT"
         )
 
     except Exception as e:

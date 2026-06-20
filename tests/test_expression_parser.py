@@ -30,6 +30,12 @@ def sample_df():
                 "volume": 1_000_000 + rng.randint(0, 500_000),
                 "amount": 10_000_000 + rng.randint(0, 5_000_000),
                 "pct_change": rng.randn() * 0.02,
+                "market_cap": 1_000_000_000 + rng.randint(0, 500_000_000),
+                "float_market_cap": 700_000_000 + rng.randint(0, 300_000_000),
+                "turnover_rate": 1.0 + abs(rng.randn()),
+                "net_income": 100_000_000 + rng.randint(0, 50_000_000),
+                "cash_flow": 80_000_000 + rng.randint(0, 30_000_000),
+                "revenue": 500_000_000 + rng.randint(0, 100_000_000),
             })
     return pd.DataFrame(rows)
 
@@ -43,6 +49,12 @@ class TestColumnReference:
     def test_unknown_column_raises(self):
         with pytest.raises(ValueError, match="Unknown column"):
             parse_expression("nonexistent_col")
+
+    def test_wind_local_columns(self, sample_df):
+        fn = parse_expression("rank(turnover_rate) + rank(cash_flow / market_cap)")
+        result = fn(sample_df)
+        assert len(result) == len(sample_df)
+        assert not result.isna().all()
 
 
 class TestNumericLiteral:
@@ -344,6 +356,10 @@ class TestWQMode:
 
     def test_wq_accepts_options_fields(self):
         fn = parse_expression("rank(implied_volatility)", mode="wq")
+        assert callable(fn)
+
+    def test_wq_accepts_dated_options_fields(self):
+        fn = parse_expression("implied_volatility_call_120 - implied_volatility_put_120", mode="wq")
         assert callable(fn)
 
     def test_wq_accepts_news_prefix_fields(self):

@@ -16,6 +16,9 @@ import logging
 import time
 from typing import Any, Callable
 
+from .wq_brain_client import SUBMIT_THRESHOLDS
+from .wq_review import parse_review_checks, primary_failure_kind
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +56,23 @@ def parse_is_metrics(is_data: dict) -> dict:
     }
 
 
+def submit_threshold_checks(metrics: dict) -> dict:
+    sharpe = safe_float(metrics.get("sharpe"))
+    fitness = safe_float(metrics.get("fitness"))
+    turnover = safe_float(metrics.get("turnover"))
+    checks = {
+        "sharpe": sharpe is not None and sharpe >= SUBMIT_THRESHOLDS["sharpe"],
+        "fitness": fitness is not None and fitness >= SUBMIT_THRESHOLDS["fitness"],
+        "turnover_min": turnover is not None and turnover >= SUBMIT_THRESHOLDS["turnover_min"],
+        "turnover_max": turnover is not None and turnover <= SUBMIT_THRESHOLDS["turnover_max"],
+    }
+    return {
+        "eligible": all(checks.values()),
+        "checks": checks,
+        "thresholds": SUBMIT_THRESHOLDS,
+    }
+
+
 def _build_wq_result_block(sharpe, fitness, returns_val, turnover, grade):
     return {
         "backtest_summary": {
@@ -86,6 +106,8 @@ def run_single_simulation(
     decay: int = 0,
     neutralization: str = "SUBINDUSTRY",
     truncation: float = 0.08,
+    max_trade: str = "OFF",
+    max_position: str = "OFF",
     auto_submit: bool = False,
     user_id: str | None = None,
     tag: str | None = None,
@@ -95,7 +117,8 @@ def run_single_simulation(
     result = client.simulate(
         expression, region=region, universe=universe,
         delay=delay, decay=decay, neutralization=neutralization,
-        truncation=truncation, progress_callback=progress_callback,
+        truncation=truncation, max_trade=max_trade, max_position=max_position,
+        progress_callback=progress_callback,
     )
 
     if not result.get("ok"):
@@ -105,9 +128,11 @@ def run_single_simulation(
     is_data = result.get("is", {})
     m = parse_is_metrics(is_data)
     grade = fitness_to_grade(m["fitness"])
+    submit_gate = submit_threshold_checks(m)
 
     submitted = False
-    if auto_submit and alpha_id and grade == "A":
+    submit_result = None
+    if auto_submit and alpha_id and submit_gate["eligible"]:
         submit_result = client.submit_alpha(alpha_id)
         submitted = submit_result.get("ok", False)
 
@@ -126,9 +151,15 @@ def run_single_simulation(
         "is_metrics": is_data,
         "oos_metrics": result.get("oos", {}),
         "settings": result.get("settings", {}),
+        "submit_eligible": submit_gate["eligible"],
+        "submit_checks": submit_gate["checks"],
+        "submit_thresholds": submit_gate["thresholds"],
         "submitted": submitted,
         "simulation_id": result.get("simulation_id"),
     }
+    if submit_result is not None:
+        out["submit_result"] = submit_result
+        out["submit_failure_kind"] = submit_result.get("failure_kind")
     out.update(_build_wq_result_block(m["sharpe"], m["fitness"], m["returns"], m["turnover"], grade))
     return out
 
@@ -178,9 +209,11 @@ def run_batch_simulation(
         is_data = sim_result.get("is", {})
         m = parse_is_metrics(is_data)
         grade = fitness_to_grade(m["fitness"])
+        submit_gate = submit_threshold_checks(m)
 
         submitted = False
-        if auto_submit and alpha_id and grade == "A":
+        submit_result = None
+        if auto_submit and alpha_id and submit_gate["eligible"]:
             submit_result = client.submit_alpha(alpha_id)
             submitted = submit_result.get("ok", False)
 
@@ -198,8 +231,13 @@ def run_batch_simulation(
             "status": "completed", "alpha_id": alpha_id,
             "sharpe": m["sharpe"], "fitness": m["fitness"],
             "returns": m["returns"], "turnover": m["turnover"],
+            "submit_eligible": submit_gate["eligible"],
+            "submit_checks": submit_gate["checks"],
             "submitted": submitted, "rating": grade,
         }
+        if submit_result is not None:
+            sub_results[key]["submit_result"] = submit_result
+            sub_results[key]["submit_failure_kind"] = submit_result.get("failure_kind")
 
     return _aggregate_batch_result(expression, len(combos), sub_results)
 
@@ -213,7 +251,7 @@ def run_submit_by_ids(
 ) -> dict:
     """Submit a list of already-simulated alphas. Returns summary dict."""
     results: dict[str, dict] = {}
-    active = sc_fail = timeout = 0
+    active = sc_fail = prod_corr_fail = timeout = 0
 
     for i, alpha_id in enumerate(alpha_ids):
         if check_cancelled and check_cancelled():
@@ -231,20 +269,28 @@ def run_submit_by_ids(
             "detail": result.get("detail", ""),
             "platform_status": result.get("platform_status", ""),
             "status_code": result.get("status_code"),
+            "failure_kind": result.get("failure_kind"),
+            "review_checks": result.get("review_checks"),
         }
         if result.get("sc_value") is not None:
             entry["sc_value"] = result["sc_value"]
             entry["sc_limit"] = result.get("sc_limit")
+        if result.get("prod_value") is not None:
+            entry["prod_value"] = result["prod_value"]
+            entry["prod_limit"] = result.get("prod_limit")
 
         if result.get("ok"):
             active += 1
             entry["final_status"] = "ACTIVE"
-        elif "SC FAIL" in result.get("detail", ""):
+        elif result.get("failure_kind") == "prod_correlation":
+            prod_corr_fail += 1
+            entry["final_status"] = "PROD_CORR_FAIL"
+        elif result.get("failure_kind") == "self_correlation" or "SC FAIL" in result.get("detail", ""):
             sc_fail += 1
             entry["final_status"] = "SC_FAIL"
         elif result.get("platform_status") == "TIMEOUT":
             timeout += 1
-            entry["final_status"] = "SC_PENDING"
+            entry["final_status"] = "CORR_PENDING"
         else:
             entry["final_status"] = "OTHER_FAIL"
 
@@ -257,6 +303,7 @@ def run_submit_by_ids(
         "total": len(alpha_ids),
         "active": active,
         "sc_fail": sc_fail,
+        "prod_corr_fail": prod_corr_fail,
         "timeout": timeout,
         "results": results,
     }
@@ -271,32 +318,65 @@ def run_check_alphas(client, alpha_ids: list[str]) -> dict:
         if not data.get("ok"):
             results[alpha_id] = {"ok": False, "error": data.get("error", "not found")}
             continue
+        results[alpha_id] = _alpha_check_result_from_data(data)
 
-        is_data = data.get("is", {})
-        checks = is_data.get("checks", [])
-        sc_check = next((c for c in checks if c.get("name") == "SELF_CORRELATION"), None)
+    return {"summary": _check_summary(results), "alphas": results}
 
-        results[alpha_id] = {
-            "ok": True,
-            "status": data.get("status"),
-            "grade": data.get("grade"),
-            "dateCreated": data.get("dateCreated"),
-            "sharpe": safe_float(is_data.get("sharpe")),
-            "fitness": safe_float(is_data.get("fitness")),
-            "returns": safe_float(is_data.get("returns")),
-            "turnover": safe_float(is_data.get("turnover")),
-            "sc_result": sc_check.get("result") if sc_check else None,
-            "sc_value": sc_check.get("value") if sc_check else None,
-        }
 
-    summary = {
-        "total": len(alpha_ids),
+def run_check_submissions(client, alpha_ids: list[str]) -> dict:
+    """Run WQ check-only submission review for multiple alphas; never submits."""
+    results: dict[str, dict] = {}
+
+    for alpha_id in alpha_ids:
+        data = client.check_alpha_submission(alpha_id)
+        if not data.get("ok") and not data.get("review_checks"):
+            results[alpha_id] = {"ok": False, "error": data.get("error", "check submission failed")}
+            continue
+        results[alpha_id] = _alpha_check_result_from_data(data)
+        results[alpha_id]["check_submission_status_code"] = data.get("status_code")
+        results[alpha_id]["check_submission_detail"] = data.get("detail")
+
+    return {"summary": _check_summary(results), "alphas": results}
+
+
+def _alpha_check_result_from_data(data: dict) -> dict:
+    is_data = data.get("is", {})
+    review_checks = data.get("review_checks") or parse_review_checks(data)
+    sc_check = review_checks.get("self_correlation", {})
+    prod_check = review_checks.get("prod_correlation", {})
+    return {
+        "ok": bool(data.get("ok", True)),
+        "status": data.get("status"),
+        "grade": data.get("grade"),
+        "dateCreated": data.get("dateCreated"),
+        "sharpe": safe_float(is_data.get("sharpe")),
+        "fitness": safe_float(is_data.get("fitness")),
+        "returns": safe_float(is_data.get("returns")),
+        "turnover": safe_float(is_data.get("turnover")),
+        "sc_result": sc_check.get("result"),
+        "sc_value": sc_check.get("value"),
+        "sc_limit": sc_check.get("limit"),
+        "prod_corr_result": prod_check.get("result"),
+        "prod_corr_value": prod_check.get("value"),
+        "prod_corr_limit": prod_check.get("limit"),
+        "review_failure_kind": data.get("failure_kind") or primary_failure_kind(review_checks),
+        "review_checks": review_checks,
+    }
+
+
+def _check_summary(results: dict[str, dict]) -> dict:
+    return {
+        "total": len(results),
         "active": sum(1 for r in results.values() if r.get("status") == "ACTIVE"),
         "unsubmitted": sum(1 for r in results.values() if r.get("status") == "UNSUBMITTED"),
         "sc_fail": sum(1 for r in results.values() if r.get("sc_result") == "FAIL"),
+        "prod_corr_fail": sum(1 for r in results.values() if r.get("prod_corr_result") == "FAIL"),
+        "corr_pending": sum(
+            1 for r in results.values()
+            if r.get("sc_result") == "PENDING" or r.get("prod_corr_result") == "PENDING"
+        ),
         "sc_pending": sum(1 for r in results.values() if r.get("sc_result") == "PENDING"),
     }
-    return {"summary": summary, "alphas": results}
 
 
 def run_list_alphas(
