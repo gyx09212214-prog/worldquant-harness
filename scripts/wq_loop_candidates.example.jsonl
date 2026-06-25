@@ -1,0 +1,5 @@
+{"expression": "rank(ts_delta(close,5))", "tag": "seed-momentum"}
+{"expression": "-rank(ts_delta(close,5))", "tag": "seed-reversal"}
+{"expression": "rank(ts_mean(returns,20))", "tag": "seed-return-mean"}
+{"expression": "-rank(ts_std(returns,20))", "tag": "seed-low-vol"}
+{"expression": "rank(volume / ts_mean(volume,20))", "tag": "seed-volume-shock"}
