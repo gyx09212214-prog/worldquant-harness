@@ -374,6 +374,9 @@ def _is_ready_to_submit(check_row: dict[str, Any], cutoff: float, *, submit_pend
         return False
     if str(check_row.get("sc_result") or "").upper() != "PASS":
         return False
+    sc_value = _first_float(check_row.get("sc_value"))
+    if sc_value is not None and sc_value > cutoff:
+        return False
     if str(check_row.get("prod_corr_result") or "").upper() == "FAIL":
         return False
     return True
