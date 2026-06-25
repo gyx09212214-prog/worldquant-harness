@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_alpha_detail import render_probe_markdown, summarize_alpha_probe, write_probe_outputs
-from quantgpt.wq_auto_mining import load_dotenv
-from quantgpt.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_alpha_detail import render_probe_markdown, summarize_alpha_probe, write_probe_outputs
+from worldquant_harness.wq_auto_mining import load_dotenv
+from worldquant_harness.wq_brain_client import get_client, is_configured
 
 
 def main(argv: list[str] | None = None) -> int:

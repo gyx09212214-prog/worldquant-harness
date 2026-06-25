@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_research_harness import (  # noqa: E402
+from worldquant_harness.wq_research_harness import (  # noqa: E402
     WQHarnessEvalConfig,
     WQHarnessEvolutionConfig,
     evolve_wq_research_experiment,
     render_wq_harness_report,
     run_wq_harness_evaluation,
 )
-from quantgpt.wq_research_sandbox import (  # noqa: E402
+from worldquant_harness.wq_research_sandbox import (  # noqa: E402
     DEFAULT_EXPERIMENT_ROOT,
     ResearchSandboxMineConfig,
     gate_research_experiment,
@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     mine.add_argument("--platform-files", nargs="*", default=[])
     mine.add_argument("--weak-memory-files", nargs="*", default=[])
     mine.add_argument("--submission-policy-file", default="")
+    mine.add_argument("--legal-inputs", default="", help="Compiled WQ legal input registry JSON")
+    mine.add_argument("--no-strict-legal-inputs", action="store_true", help="Warn instead of rejecting unknown registry fields")
     mine.add_argument("--max-candidates", type=int, default=200)
     mine.add_argument("--similarity-cutoff", type=float, default=0.72)
     mine.add_argument("--max-family-count", type=int, default=8)
@@ -106,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
                 platform_files=tuple(_resolve_many(args.platform_files)),
                 weak_memory_files=tuple(_resolve_many(args.weak_memory_files)),
                 submission_policy_file=_resolve(args.submission_policy_file) if args.submission_policy_file else None,
+                legal_inputs_file=_resolve(args.legal_inputs) if args.legal_inputs else None,
+                strict_legal_inputs=not args.no_strict_legal_inputs,
                 max_candidates=args.max_candidates,
                 similarity_cutoff=args.similarity_cutoff,
                 max_family_count=args.max_family_count,

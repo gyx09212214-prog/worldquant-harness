@@ -1,5 +1,5 @@
 const BASE = "";
-const ADMIN_TOKEN_KEY = "quantgpt_admin_token";
+const ADMIN_TOKEN_KEY = "worldquant_harness_admin_token";
 
 function getAdminToken(): string | null {
   return localStorage.getItem(ADMIN_TOKEN_KEY);

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from quantgpt.wq_brain_client import WQBrainClient, configured_accounts, get_client, is_configured
-from quantgpt.wq_brain_service import submit_threshold_checks
+from worldquant_harness.wq_brain_client import WQBrainClient, configured_accounts, get_client, is_configured
+from worldquant_harness.wq_brain_service import submit_threshold_checks
 
 pytestmark = pytest.mark.asyncio
 
@@ -166,7 +166,7 @@ class TestWQBrainSubmitEndpoint:
     async def test_submit_creates_task(self, client, test_user, auth_headers):
         with (
             patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}, clear=False),
-            patch("quantgpt.routes.wq_brain._run_wq_brain_task"),
+            patch("worldquant_harness.routes.wq_brain._run_wq_brain_task"),
         ):
             resp = await client.post("/api/v1/wq-brain/submit", json={
                 "expression": "rank(close)",

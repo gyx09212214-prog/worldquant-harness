@@ -3,7 +3,7 @@ import type { BacktestMetrics } from "../types/backtest";
 const BASE = "";
 
 function getAccessToken(): string | null {
-  return localStorage.getItem("quantgpt_access_token");
+  return localStorage.getItem("worldquant_harness_access_token");
 }
 
 function authHeaders(): Record<string, string> {

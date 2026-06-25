@@ -1,4 +1,4 @@
-from quantgpt.wq_review import (
+from worldquant_harness.wq_review import (
     correlation_failure_detail,
     parse_review_checks,
     primary_failure_kind,

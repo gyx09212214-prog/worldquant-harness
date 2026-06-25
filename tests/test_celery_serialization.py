@@ -1,14 +1,14 @@
 """Tests for Celery JSON serialization helpers (to_json_transport / from_json_transport)."""
 
-import math
 import os
-import tempfile
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from quantgpt.celery_app import CELERY_DATA_DIR, from_json_transport, to_json_transport
+pytest.importorskip("celery")
+
+from worldquant_harness.celery_app import CELERY_DATA_DIR, from_json_transport, to_json_transport
 
 
 class TestToJsonTransport:
@@ -56,18 +56,18 @@ class TestToJsonTransport:
     def test_dataframe_creates_parquet(self):
         df = pd.DataFrame({"x": [1, 2, 3], "y": [4.0, 5.0, 6.0]})
         result = to_json_transport(df)
-        assert "__quantgpt_parquet__" in result
+        assert "__worldquant_harness_parquet__" in result
         assert result["__type__"] == "dataframe"
-        assert os.path.exists(result["__quantgpt_parquet__"])
-        os.unlink(result["__quantgpt_parquet__"])
+        assert os.path.exists(result["__worldquant_harness_parquet__"])
+        os.unlink(result["__worldquant_harness_parquet__"])
 
     def test_series_creates_parquet(self):
         s = pd.Series([10, 20, 30], name="vals")
         result = to_json_transport(s)
-        assert "__quantgpt_parquet__" in result
+        assert "__worldquant_harness_parquet__" in result
         assert result["__type__"] == "series"
-        assert os.path.exists(result["__quantgpt_parquet__"])
-        os.unlink(result["__quantgpt_parquet__"])
+        assert os.path.exists(result["__worldquant_harness_parquet__"])
+        os.unlink(result["__worldquant_harness_parquet__"])
 
 
 class TestRoundTrip:
@@ -119,7 +119,7 @@ class TestRoundTrip:
     def test_parquet_files_cleaned_up(self):
         df = pd.DataFrame({"x": [1]})
         transported = to_json_transport(df)
-        path = transported["__quantgpt_parquet__"]
+        path = transported["__worldquant_harness_parquet__"]
         assert os.path.exists(path)
 
         from_json_transport(transported)
@@ -129,7 +129,7 @@ class TestRoundTrip:
 class TestPathTraversal:
     def test_rejects_path_outside_data_dir(self):
         marker = {
-            "__quantgpt_parquet__": "/etc/passwd",
+            "__worldquant_harness_parquet__": "/etc/passwd",
             "__type__": "dataframe",
         }
         with pytest.raises(ValueError, match="outside allowed directory"):
@@ -137,7 +137,7 @@ class TestPathTraversal:
 
     def test_rejects_relative_traversal(self):
         marker = {
-            "__quantgpt_parquet__": str(CELERY_DATA_DIR / ".." / ".." / "etc" / "passwd"),
+            "__worldquant_harness_parquet__": str(CELERY_DATA_DIR / ".." / ".." / "etc" / "passwd"),
             "__type__": "dataframe",
         }
         with pytest.raises(ValueError, match="outside allowed directory"):

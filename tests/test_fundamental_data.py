@@ -1,10 +1,8 @@
-"""Tests for quantgpt.fundamental_data — variable registry, detection, and quarter logic."""
+"""Tests for worldquant_harness.fundamental_data — variable registry, detection, and quarter logic."""
 
-import numpy as np
 import pandas as pd
-import pytest
 
-from quantgpt.fundamental_data import (
+from worldquant_harness.fundamental_data import (
     ALL_FUNDAMENTAL_NAMES,
     DERIVED_VARIABLES,
     FUNDAMENTAL_VARIABLES,
@@ -13,7 +11,6 @@ from quantgpt.fundamental_data import (
     enrich_market_data,
     get_needed_apis,
 )
-
 
 # ─── Variable registry consistency ───────────────────────────────
 

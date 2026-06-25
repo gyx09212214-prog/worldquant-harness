@@ -76,13 +76,29 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     platform_rows = read_jsonl(Path(args.platform_file))
     active_rows = read_jsonl(Path(args.active_file))
+    block_rows: list[dict[str, Any]] = []
+    for block_file in args.block_files:
+        block_rows.extend(read_jsonl(Path(block_file)))
+    blocklist = build_blocklist(block_rows, min_correlation=args.block_min_correlation)
+    exclude_domains = {str(domain).strip() for domain in args.exclude_domains if str(domain).strip()}
     active_ids = {str(row.get("alpha_id") or row.get("id") or "") for row in active_rows}
     active_exprs = [expression_of(row) for row in active_rows if expression_of(row)]
     active_keys = {canonical(expr) for expr in active_exprs}
 
     raw_candidates: list[dict[str, Any]] = []
     for row in platform_rows:
-        candidate = candidate_from_platform(row, active_ids, active_keys, active_exprs)
+        candidate = candidate_from_platform(
+            row,
+            active_ids,
+            active_keys,
+            active_exprs,
+            blocklist=blocklist,
+            max_active_similarity_cutoff=args.max_active_similarity,
+            block_field_jaccard=args.block_field_jaccard,
+            exclude_domains=exclude_domains,
+            max_returns_references=args.max_returns_references,
+            max_field_count=args.max_field_count,
+        )
         if candidate is not None:
             raw_candidates.append(candidate)
 
@@ -112,6 +128,19 @@ def main(argv: list[str] | None = None) -> int:
         "eligible_before_diversity": len(raw_candidates),
         "written": len(selected),
         "output": str(output),
+        "blocklist": {
+            "files": [str(path) for path in args.block_files],
+            "source_rows": len(block_rows),
+            "alpha_ids": len(blocklist["alpha_ids"]),
+            "anchor_ids": len(blocklist["anchor_ids"]),
+            "self_correlation_signatures": len(blocklist["self_correlation_signatures"]),
+            "min_correlation": args.block_min_correlation,
+            "field_jaccard": args.block_field_jaccard,
+        },
+        "max_active_similarity": args.max_active_similarity,
+        "exclude_domains": sorted(exclude_domains),
+        "max_returns_references": args.max_returns_references,
+        "max_field_count": args.max_field_count,
         "domain_counts": counts(row["domain"] for row in selected),
         "top": [
             {
@@ -139,6 +168,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--limit", type=int, default=80)
     parser.add_argument("--per-domain", type=int, default=14)
+    parser.add_argument("--block-files", nargs="*", default=[])
+    parser.add_argument("--block-min-correlation", type=float, default=0.70)
+    parser.add_argument("--block-field-jaccard", type=float, default=0.72)
+    parser.add_argument("--max-active-similarity", type=float, default=0.93)
+    parser.add_argument("--exclude-domains", nargs="*", default=[])
+    parser.add_argument("--max-returns-references", type=int, default=-1)
+    parser.add_argument("--max-field-count", type=int, default=0)
     return parser.parse_args(argv)
 
 
@@ -147,9 +183,20 @@ def candidate_from_platform(
     active_ids: set[str],
     active_keys: set[str],
     active_exprs: list[str],
+    *,
+    blocklist: dict[str, Any] | None = None,
+    max_active_similarity_cutoff: float = 0.93,
+    block_field_jaccard: float = 0.72,
+    exclude_domains: set[str] | None = None,
+    max_returns_references: int = -1,
+    max_field_count: int = 0,
 ) -> dict[str, Any] | None:
+    blocklist = blocklist or empty_blocklist()
+    exclude_domains = exclude_domains or set()
     alpha_id = str(row.get("alpha_id") or row.get("id") or "")
     if not alpha_id or alpha_id in active_ids:
+        return None
+    if alpha_id in blocklist["alpha_ids"] or alpha_id in blocklist["anchor_ids"]:
         return None
     if str(row.get("status") or "").upper() != "UNSUBMITTED":
         return None
@@ -159,6 +206,16 @@ def candidate_from_platform(
         return None
     expr_key = canonical(expr)
     if expr_key in active_keys:
+        return None
+    if max_returns_references >= 0 and returns_reference_count(expr) > max_returns_references:
+        return None
+    expr_fields = fields(expr)
+    if max_field_count > 0 and len(expr_fields) > max_field_count:
+        return None
+    domain = classify_domain(expr)
+    if domain in exclude_domains:
+        return None
+    if blocklist_expression_match(expr, domain, blocklist, field_jaccard_cutoff=block_field_jaccard):
         return None
 
     sharpe = safe_float(row.get("sharpe"))
@@ -170,9 +227,8 @@ def candidate_from_platform(
     if has_blocking_platform_fail(row):
         return None
 
-    domain = classify_domain(expr)
     max_sim, nearest_id = max_active_similarity(expr, active_exprs)
-    if max_sim >= 0.93:
+    if max_sim >= max_active_similarity_cutoff:
         return None
 
     score = (
@@ -205,6 +261,192 @@ def candidate_from_platform(
         "settings": row.get("settings") or {},
         "tag": f"existing-diverse-{domain}-{alpha_id}",
     }
+
+
+def empty_blocklist() -> dict[str, Any]:
+    return {
+        "alpha_ids": set(),
+        "anchor_ids": set(),
+        "expression_keys": set(),
+        "self_correlation_signatures": [],
+    }
+
+
+def build_blocklist(rows: list[dict[str, Any]], *, min_correlation: float = 0.70) -> dict[str, Any]:
+    blocklist = empty_blocklist()
+    for row in rows:
+        for alpha_id in ids_from_row(row):
+            blocklist["alpha_ids"].add(alpha_id)
+
+        correlated_records = self_correlated_records(row, min_correlation=min_correlation)
+        for record in correlated_records:
+            anchor_id = self_correlated_record_id(record)
+            if anchor_id:
+                blocklist["anchor_ids"].add(anchor_id)
+
+        expr = expression_of(row)
+        if not expr:
+            continue
+        blocklist["expression_keys"].add(canonical(expr))
+        if correlated_records or is_self_correlation_failure(row, min_correlation=min_correlation):
+            blocklist["self_correlation_signatures"].append({
+                "domain": classify_domain(expr),
+                "fields": tuple(sorted(fields(expr))),
+                "operators": tuple(sorted(operators(expr))),
+                "expression_key": canonical(expr),
+            })
+    return blocklist
+
+
+def ids_from_row(row: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for key in ("alpha_id", "id", "platform_alpha_id"):
+        value = row.get(key)
+        if value:
+            ids.add(str(value))
+    meta = row.get("candidate_meta")
+    if isinstance(meta, dict):
+        for key in ("alpha_id", "id", "platform_alpha_id"):
+            value = meta.get(key)
+            if value:
+                ids.add(str(value))
+    parent_ids = row.get("parent_alpha_ids")
+    if isinstance(parent_ids, list):
+        ids.update(str(value) for value in parent_ids if value)
+    return ids
+
+
+def blocklist_expression_match(
+    expr: str,
+    domain: str,
+    blocklist: dict[str, Any],
+    *,
+    field_jaccard_cutoff: float,
+) -> bool:
+    expr_key = canonical(expr)
+    if expr_key in blocklist["expression_keys"]:
+        return True
+    expr_fields = fields(expr)
+    expr_operators = operators(expr)
+    for signature in blocklist["self_correlation_signatures"]:
+        blocked_fields = set(signature.get("fields") or [])
+        if not blocked_fields:
+            continue
+        if expr_fields == blocked_fields:
+            return True
+        if str(signature.get("domain") or "") != domain:
+            continue
+        if len(expr_fields) < 3 or len(blocked_fields) < 3:
+            continue
+        field_overlap = jaccard(expr_fields, blocked_fields)
+        if field_overlap < field_jaccard_cutoff:
+            continue
+        blocked_operators = set(signature.get("operators") or [])
+        operator_overlap = jaccard(expr_operators, blocked_operators)
+        if operator_overlap >= 0.20 or field_overlap >= 0.90:
+            return True
+    return False
+
+
+def is_self_correlation_failure(row: dict[str, Any], *, min_correlation: float) -> bool:
+    if self_correlated_records(row, min_correlation=min_correlation):
+        return True
+    status = str(row.get("final_status") or row.get("status") or "").upper()
+    if "SC_FAIL" in status or "SELF_CORRELATION" in status:
+        return True
+    for key in ("failure_kind", "presubmit_reject_reason", "submit_reject_reason", "detail", "reason"):
+        if "SELF_CORRELATION" in str(row.get(key) or "").upper():
+            return True
+    review = row.get("review_checks") if isinstance(row.get("review_checks"), dict) else {}
+    failed = {str(item).upper() for item in review.get("failed") or []}
+    if "SELF_CORRELATION" in failed:
+        return True
+    sc_result = str(row.get("sc_result") or "").upper()
+    sc_value = safe_float(row.get("sc_value"), default=-999.0)
+    return sc_result in {"FAIL", "FAILED"} or sc_value >= min_correlation
+
+
+def self_correlated_records(row: dict[str, Any], *, min_correlation: float) -> list[Any]:
+    records: list[Any] = []
+    for payload in self_correlation_payloads(row):
+        payload_records = payload.get("records")
+        if not isinstance(payload_records, list):
+            continue
+        schema = payload.get("schema") if isinstance(payload.get("schema"), dict) else {}
+        for record in payload_records:
+            correlation = self_correlated_record_correlation(record, schema)
+            if correlation >= min_correlation:
+                records.append(record)
+    return records
+
+
+def self_correlation_payloads(value: Any) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        direct = value.get("selfCorrelated")
+        if isinstance(direct, dict):
+            payloads.append(direct)
+        for child in value.values():
+            payloads.extend(self_correlation_payloads(child))
+    elif isinstance(value, list):
+        for item in value:
+            payloads.extend(self_correlation_payloads(item))
+    return payloads
+
+
+def self_correlated_record_id(record: Any) -> str | None:
+    if isinstance(record, dict):
+        for key in ("id", "alpha_id", "alphaId"):
+            value = record.get(key)
+            if value:
+                return str(value)
+        return None
+    if isinstance(record, list):
+        for item in record:
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+    return None
+
+
+def self_correlated_record_correlation(record: Any, schema: dict[str, Any]) -> float:
+    if isinstance(record, dict):
+        for key in ("correlation", "value", "score"):
+            value = safe_float(record.get(key), default=-999.0)
+            if -1.0 <= value <= 1.0:
+                return abs(value)
+        return -999.0
+
+    if not isinstance(record, list):
+        return -999.0
+
+    names = schema_property_names(schema)
+    for index, name in enumerate(names):
+        if index >= len(record):
+            continue
+        if "correlation" in name or name in {"value", "score"}:
+            value = safe_float(record[index], default=-999.0)
+            if -1.0 <= value <= 1.0:
+                return abs(value)
+
+    numeric_values = []
+    for item in record[1:]:
+        value = safe_float(item, default=-999.0)
+        if -1.0 <= value <= 1.0:
+            numeric_values.append(abs(value))
+    return max(numeric_values) if numeric_values else -999.0
+
+
+def schema_property_names(schema: dict[str, Any]) -> list[str]:
+    properties = schema.get("properties")
+    if not isinstance(properties, list):
+        return []
+    names: list[str] = []
+    for item in properties:
+        if isinstance(item, dict):
+            names.append(str(item.get("name") or item.get("title") or "").lower())
+        else:
+            names.append(str(item).lower())
+    return names
 
 
 def has_blocking_platform_fail(row: dict[str, Any]) -> bool:
@@ -327,6 +569,10 @@ def similarity(left: str, right: str) -> float:
 def fields(expr: str) -> set[str]:
     tokens = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expr))
     return {token for token in tokens if token not in COMMON_IDENTIFIERS}
+
+
+def returns_reference_count(expr: str) -> int:
+    return len(re.findall(r"\breturns\b", expr, flags=re.IGNORECASE))
 
 
 def operators(expr: str) -> set[str]:

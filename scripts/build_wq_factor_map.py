@@ -1,4 +1,4 @@
-"""Build a static WQ factor map from QuantGPT ledger and artifact files."""
+"""Build a static WQ factor map from worldquant-harness ledger and artifact files."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_auto_mining import load_dotenv
-from quantgpt.wq_factor_map import FactorMapConfig, build_factor_map
+from worldquant_harness.wq_auto_mining import load_dotenv
+from worldquant_harness.wq_factor_map import FactorMapConfig, build_factor_map
 
 
 DEFAULT_INPUT_GLOBS = (
@@ -29,9 +29,9 @@ DEFAULT_INPUT_GLOBS = (
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     load_dotenv(ROOT)
-    os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{(ROOT / 'quantgpt.db').as_posix()}")
+    os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{(ROOT / 'worldquant_harness.db').as_posix()}")
 
-    from quantgpt.db import _get_session_factory
+    from worldquant_harness.db import _get_session_factory
 
     output_dir = _resolve_path(args.output_dir) if args.output_dir else (
         ROOT / "reports" / f"wq_factor_map_{datetime.now():%Y%m%d_%H%M%S}"
@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build QuantGPT WQ factor map artifacts")
+    parser = argparse.ArgumentParser(description="Build worldquant-harness WQ factor map artifacts")
     parser.add_argument("--input", nargs="*", default=[], help="JSON/JSONL artifact files or glob patterns")
     parser.add_argument("--no-default-inputs", action="store_true", help="Do not scan known forum/community artifacts")
     parser.add_argument("--output-dir", default="", help="Artifact output directory")
@@ -124,7 +124,7 @@ def _default_obsidian_output() -> Path:
         / "Quant"
         / "Stock"
         / "Factors"
-        / f"QuantGPT 因子地图 {datetime.now():%Y%m%d}.md"
+        / f"worldquant-harness 因子地图 {datetime.now():%Y%m%d}.md"
     )
 
 

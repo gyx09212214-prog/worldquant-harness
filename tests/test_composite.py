@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from quantgpt.composite import combine_factors, compute_factor_correlation
+from worldquant_harness.composite import combine_factors, compute_factor_correlation
 
 
 def _make_market_df(n_dates=20, n_stocks=10):

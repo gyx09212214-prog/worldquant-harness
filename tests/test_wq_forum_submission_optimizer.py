@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_forum_submission_optimizer import (
+from worldquant_harness.wq_forum_submission_optimizer import (
     ForumSubmissionOptimizerConfig,
     build_forum_submission_plan,
     evaluate_candidate_policy,

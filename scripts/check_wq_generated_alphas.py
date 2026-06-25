@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_auto_mining import load_dotenv, write_json
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_check_alphas
+from worldquant_harness.wq_auto_mining import load_dotenv, write_json
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_check_alphas
 
 
 DEFAULT_CHECK_STATUSES = {"eligible", "pending_correlation_check"}
@@ -272,7 +272,7 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 def _record_ledger(records: list[dict], *, account: str, source_run_id: str) -> dict:
     try:
-        from quantgpt.wq_alpha_ledger import record_api_check_records_sync
+        from worldquant_harness.wq_alpha_ledger import record_api_check_records_sync
 
         return record_api_check_records_sync(
             records,

@@ -9,7 +9,7 @@ interface Props {
 
 function getAuthReportUrl(reportUrl: string): string {
   const url = getReportUrl(reportUrl);
-  const token = localStorage.getItem("quantgpt_access_token");
+  const token = localStorage.getItem("worldquant_harness_access_token");
   if (!token) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}token=${encodeURIComponent(token)}`;

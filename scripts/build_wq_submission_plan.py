@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_forum_submission_optimizer import (
+from worldquant_harness.wq_forum_submission_optimizer import (
     ForumSubmissionOptimizerConfig,
     build_forum_submission_plan,
 )
@@ -96,7 +96,7 @@ def _default_obsidian_output() -> Path:
         / "Quant"
         / "Stock"
         / "Factors"
-        / f"QuantGPT 论坛提交优化 {datetime.now():%Y%m%d}.md"
+        / f"worldquant-harness 论坛提交优化 {datetime.now():%Y%m%d}.md"
     )
 
 

@@ -1,8 +1,17 @@
 [project]
-name = "quantgpt"
+name = "worldquant-harness"
 version = "2.8.0"
-description = "QuantGPT — AI 驱动的量化策略回测平台"
+description = "worldquant-harness — agent research harness for WorldQuant-oriented alpha workflows"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+keywords = ["quant", "factor-research", "agent", "harness", "worldquant"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "pandas>=2.0",
     "numpy>=1.24",
@@ -36,7 +45,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["quantgpt*"]
+include = ["worldquant_harness*"]
 
 [tool.ruff]
 target-version = "py310"
@@ -62,7 +71,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["quantgpt"]
+known-first-party = ["worldquant_harness"]
 
 [tool.pyright]
 pythonVersion = "3.10"
@@ -75,8 +84,8 @@ asyncio_mode = "strict"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["quantgpt"]
-omit = ["quantgpt/__main__.py"]
+source = ["worldquant_harness"]
+omit = ["worldquant_harness/__main__.py"]
 
 [tool.coverage.report]
 fail_under = 25

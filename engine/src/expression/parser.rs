@@ -1,6 +1,6 @@
-// QuantGPT Expression Parser (Rust)
+// worldquant-harness Expression Parser (Rust)
 // Copyright (c) 2026 Miasyster. Licensed under the MIT License.
-// https://github.com/Miasyster/QuantGPT
+// https://github.com/gyx09212214-prog/worldquant-harness
 
 use super::ast::Expr;
 use std::collections::HashMap;

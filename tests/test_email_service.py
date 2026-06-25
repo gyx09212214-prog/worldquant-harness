@@ -1,7 +1,7 @@
-"""Tests for quantgpt/email_service.py — code generation and email templates."""
+"""Tests for worldquant_harness/email_service.py — code generation and email templates."""
 
 
-from quantgpt.email_service import (
+from worldquant_harness.email_service import (
     _email_wrapper,
     _get_smtp_config,
     _truncate,
@@ -45,7 +45,7 @@ class TestTruncate:
 class TestEmailWrapper:
     def test_contains_brand(self):
         html = _email_wrapper("<p>Test</p>")
-        assert "QuantGPT" in html
+        assert "worldquant-harness" in html
 
     def test_contains_content(self):
         html = _email_wrapper("<p>Custom content</p>")

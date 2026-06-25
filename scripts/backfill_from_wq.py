@@ -14,10 +14,10 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 async def main():
-    from quantgpt.db import _get_session_factory, init_db
-    from quantgpt.models import Task as TaskModel, User
-    from quantgpt.auth import _DEV_USER_ID
-    from quantgpt.wq_brain_client import WQBrainClient, is_configured
+    from worldquant_harness.db import _get_session_factory, init_db
+    from worldquant_harness.models import Task as TaskModel, User
+    from worldquant_harness.auth import _DEV_USER_ID
+    from worldquant_harness.wq_brain_client import WQBrainClient, is_configured
     from sqlalchemy import func, select
 
     await init_db()

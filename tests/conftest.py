@@ -1,4 +1,4 @@
-"""Shared fixtures for QuantGPT tests."""
+"""Shared fixtures for worldquant-harness tests."""
 
 import os
 import uuid
@@ -9,14 +9,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 os.environ["AUTH_DISABLED"] = "false"
-os.environ["QUANTGPT_TASK_BACKEND"] = "thread"
+os.environ["WORLDQUANT_HARNESS_TASK_BACKEND"] = "thread"
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-ci-only-do-not-use-in-production")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
-os.environ.setdefault("QUANTGPT_ADMIN_PASSWORD", "test-admin-pw")
+os.environ.setdefault("WORLDQUANT_HARNESS_ADMIN_PASSWORD", "test-admin-pw")
 
-from quantgpt.auth import create_access_token, hash_password
-from quantgpt.backtest import api_context
-from quantgpt.models import Base, User
+from worldquant_harness.auth import create_access_token, hash_password
+from worldquant_harness.backtest import api_context
+from worldquant_harness.models import Base, User
 
 
 @pytest.fixture(autouse=True)
@@ -46,8 +46,8 @@ async def client(engine):
     """AsyncClient wired to the FastAPI app with an in-memory SQLite DB."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    from quantgpt.api_server import app
-    from quantgpt.db import get_db
+    from worldquant_harness.api_server import app
+    from worldquant_harness.db import get_db
 
     async def _override_get_db():
         async with factory() as session:

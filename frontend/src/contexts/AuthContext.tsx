@@ -20,9 +20,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const TOKEN_KEY = "quantgpt_access_token";
-const REFRESH_KEY = "quantgpt_refresh_token";
-const GUEST_FLAG_KEY = "quantgpt_is_guest";
+const TOKEN_KEY = "worldquant_harness_access_token";
+const REFRESH_KEY = "worldquant_harness_refresh_token";
+const GUEST_FLAG_KEY = "worldquant_harness_is_guest";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

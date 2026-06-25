@@ -19,10 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_auto_mining import load_dotenv, validate_wq_expression
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_single_simulation
-
+from worldquant_harness.wq_auto_mining import load_dotenv, validate_wq_expression
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_single_simulation
 
 IGNORED_PLATFORM_CHECKS = {"SELF_CORRELATION", "PROD_CORRELATION", "MATCHES_COMPETITION"}
 

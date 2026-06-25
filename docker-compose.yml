@@ -1,19 +1,19 @@
 services:
-  quantgpt:
+  worldquant_harness:
     build: .
     ports:
       - "8003:8003"
     volumes:
-      - quantgpt-data:/app/data
-      - quantgpt-reports:/app/reports
-      - ./quantgpt.db:/app/quantgpt.db
+      - worldquant-harness-data:/app/data
+      - worldquant-harness-reports:/app/reports
+      - ./worldquant_harness.db:/app/worldquant_harness.db
     env_file:
       - .env
     environment:
       - AUTH_DISABLED=true
-      - DATABASE_URL=postgresql+asyncpg://quantgpt:password@host.docker.internal:5433/quantgpt
+      - DATABASE_URL=postgresql+asyncpg://worldquant_harness:password@host.docker.internal:5433/worldquant_harness
     restart: unless-stopped
 
 volumes:
-  quantgpt-data:
-  quantgpt-reports:
+  worldquant-harness-data:
+  worldquant-harness-reports:

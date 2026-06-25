@@ -1,4 +1,4 @@
-from quantgpt.wq_alpha_detail import extract_pnl_curve, render_probe_markdown, summarize_alpha_probe
+from worldquant_harness.wq_alpha_detail import extract_pnl_curve, render_probe_markdown, summarize_alpha_probe
 
 
 def test_extract_pnl_curve_from_chart_payload():

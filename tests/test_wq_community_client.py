@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from quantgpt.wq_community_client import (
+from worldquant_harness.wq_community_client import (
     WQCommunityExportConfig,
     export_community,
     fetch_collection,

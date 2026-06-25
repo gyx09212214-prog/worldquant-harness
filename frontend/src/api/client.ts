@@ -7,7 +7,7 @@ export function setAuthDisabled(v: boolean) { _authDisabled = v; }
 export function getAuthDisabled() { return _authDisabled; }
 
 function getAccessToken(): string | null {
-  return localStorage.getItem("quantgpt_access_token");
+  return localStorage.getItem("worldquant_harness_access_token");
 }
 
 function authHeaders(): Record<string, string> {
@@ -24,10 +24,10 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
   if (res.status === 401 && !_authDisabled) {
     // Guest tokens don't need refresh
-    if (localStorage.getItem("quantgpt_is_guest") === "1") return res;
+    if (localStorage.getItem("worldquant_harness_is_guest") === "1") return res;
 
     // Try refresh
-    const refreshTokenStr = localStorage.getItem("quantgpt_refresh_token");
+    const refreshTokenStr = localStorage.getItem("worldquant_harness_refresh_token");
     if (refreshTokenStr) {
       try {
         const refreshRes = await fetch(`${BASE}/api/v1/auth/refresh`, {
@@ -37,7 +37,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
         });
         if (refreshRes.ok) {
           const { access_token } = await refreshRes.json();
-          localStorage.setItem("quantgpt_access_token", access_token);
+          localStorage.setItem("worldquant_harness_access_token", access_token);
           // Retry original request
           const retryHeaders = { ...options.headers, "Content-Type": "application/json", Authorization: `Bearer ${access_token}` };
           return fetch(url, { ...options, headers: retryHeaders });
@@ -45,8 +45,8 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       } catch { /* fall through */ }
     }
     // Refresh failed, redirect to login
-    localStorage.removeItem("quantgpt_access_token");
-    localStorage.removeItem("quantgpt_refresh_token");
+    localStorage.removeItem("worldquant_harness_access_token");
+    localStorage.removeItem("worldquant_harness_refresh_token");
     window.location.href = "/login";
   }
 

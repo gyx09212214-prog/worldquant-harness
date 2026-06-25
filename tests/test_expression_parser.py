@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quantgpt.expression_parser import (
+from worldquant_harness.expression_parser import (
     extract_components,
     normalize_expression,
     parse_expression,

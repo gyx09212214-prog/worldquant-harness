@@ -1,4 +1,4 @@
-"""Factor mining utilities — submit expressions to QuantGPT server and parse results.
+"""Factor mining utilities — submit expressions to worldquant-harness server and parse results.
 
 Stateless utility library. The research loop is driven by the
 factor-mine skill (SKILL.md), not by this file.

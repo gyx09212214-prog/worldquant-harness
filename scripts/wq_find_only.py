@@ -14,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.alpha_tracker import compute_similarity
-from quantgpt.wq_auto_mining import append_jsonl, load_dotenv, validate_wq_expression, write_json as _write_json
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_single_simulation
+from worldquant_harness.alpha_tracker import compute_similarity
+from worldquant_harness.wq_auto_mining import append_jsonl, load_dotenv, validate_wq_expression, write_json as _write_json
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_single_simulation
 from scripts.check_wq_generated_alphas import check_generated_alphas
 
 
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.use_ledger:
         try:
-            from quantgpt.wq_alpha_ledger import build_exclusion_expressions_sync
+            from worldquant_harness.wq_alpha_ledger import build_exclusion_expressions_sync
 
             excluded_expressions.extend(build_exclusion_expressions_sync())
         except Exception:
@@ -581,7 +581,7 @@ def _write_terminal_status(args: argparse.Namespace, status_file: Path, payload:
 
 def _ledger_block(expression: str, settings: dict, args: argparse.Namespace) -> dict:
     try:
-        from quantgpt.wq_alpha_ledger import should_block_expression_sync
+        from worldquant_harness.wq_alpha_ledger import should_block_expression_sync
 
         return should_block_expression_sync(
             expression,
@@ -602,7 +602,7 @@ def _record_ledger_entry(
     if not args.use_ledger:
         return
     try:
-        from quantgpt.wq_alpha_ledger import record_find_only_entry_sync
+        from worldquant_harness.wq_alpha_ledger import record_find_only_entry_sync
 
         record_find_only_entry_sync(
             entry,

@@ -1,13 +1,12 @@
-"""Tests for quantgpt.market_data — pure logic and cache behavior."""
+"""Tests for worldquant_harness.market_data — pure logic and cache behavior."""
 
-import os
 import tempfile
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from quantgpt.market_data import (
+from worldquant_harness.market_data import (
     BENCHMARK_CODES,
     UNIVERSES,
     MarketDataFetcher,
@@ -15,7 +14,6 @@ from quantgpt.market_data import (
     _to_rq_code,
     get_universe,
 )
-
 
 # ─── Code conversion ─────────────────────────────────────────────
 

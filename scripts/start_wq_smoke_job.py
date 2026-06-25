@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = Path(r"C:\Users\guoyx\AppData\Local\Programs\Python\Python313\python.exe")
+PYTHON = Path(sys.executable)
 
 
 def main() -> int:
@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument("--decay", type=int, default=0)
     parser.add_argument("--neutralization", default="SUBINDUSTRY")
     parser.add_argument("--truncation", type=float, default=0.08)
-    parser.add_argument("--tag", default="quantgpt-smoke")
+    parser.add_argument("--tag", default="worldquant_harness-smoke")
     args = parser.parse_args()
 
     logs_dir = ROOT / "logs"

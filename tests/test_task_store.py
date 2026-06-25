@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from quantgpt.task_store import (
+from worldquant_harness.task_store import (
     CancelledException,
     _rate_buckets,
     active_task_count,
@@ -121,7 +121,7 @@ class TestSSETickets:
         assert validate_sse_ticket("bogus-ticket", "task-1") is None
 
     def test_expired_ticket_rejected(self):
-        from quantgpt.task_store import _sse_tickets, _sse_tickets_lock
+        from worldquant_harness.task_store import _sse_tickets, _sse_tickets_lock
 
         ticket = create_sse_ticket("task-1", "user-1")
         with _sse_tickets_lock:

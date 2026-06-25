@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.community_triage import config_from_paths, triage_community
-from quantgpt.wq_brain_client import WQBrainClient
-from quantgpt.wq_community_client import (
+from worldquant_harness.community_triage import config_from_paths, triage_community
+from worldquant_harness.wq_brain_client import WQBrainClient
+from worldquant_harness.wq_community_client import (
     DEFAULT_COMMENT_PATH_TEMPLATES,
     DEFAULT_POST_PATHS,
     WQCommunityExportConfig,
@@ -90,7 +90,7 @@ def _apply_manual_auth(session, args: argparse.Namespace) -> bool:
 
     session.headers.setdefault(
         "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) QuantGPT WQ Community Exporter",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) worldquant-harness WQ Community Exporter",
     )
     session.headers["Accept-Encoding"] = "identity"
     return used_manual_auth

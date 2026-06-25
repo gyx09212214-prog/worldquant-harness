@@ -3,9 +3,14 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from quantgpt.models import Base, WQAlphaExperiment, WQFailureMemory
-from quantgpt.wq_alpha_ledger import record_api_check_record, record_find_only_entry, should_block_expression
-from quantgpt.wq_failure_memory import classify_failures, lifecycle_status
+from worldquant_harness.models import Base, SubmittedAlpha, WQAlphaExperiment, WQFailureMemory
+from worldquant_harness.wq_alpha_ledger import (
+    record_api_check_record,
+    record_find_only_entry,
+    record_submitted_alpha_in_ledger,
+    should_block_expression,
+)
+from worldquant_harness.wq_failure_memory import classify_failures, lifecycle_status
 
 
 @pytest_asyncio.fixture
@@ -138,3 +143,43 @@ async def test_should_block_expression_uses_blocking_failure_memory(ledger_facto
 
     assert block["blocked"] is True
     assert block["reasons"][0]["failure_kind"] in {"self_correlation_fail", "high_similarity"}
+
+
+@pytest.mark.asyncio
+async def test_record_submitted_alpha_mirrors_to_submitted_alpha_table(ledger_factory):
+    user_id = "11111111-1111-1111-1111-111111111111"
+
+    async with ledger_factory() as session:
+        await record_submitted_alpha_in_ledger(
+            session,
+            user_id=user_id,
+            alpha_id="active_alpha",
+            expression="rank(open)",
+            sharpe=1.8,
+            fitness=1.2,
+            turnover=0.2,
+            status="active",
+        )
+        await record_submitted_alpha_in_ledger(
+            session,
+            user_id=user_id,
+            alpha_id="active_alpha",
+            expression="rank(open)",
+            sharpe=1.9,
+            fitness=1.3,
+            turnover=0.22,
+            status="active",
+        )
+        await session.commit()
+
+        experiment_count = await session.scalar(select(func.count()).select_from(WQAlphaExperiment))
+        submitted_count = await session.scalar(select(func.count()).select_from(SubmittedAlpha))
+        memory_count = await session.scalar(select(func.count()).select_from(WQFailureMemory))
+        submitted = (await session.execute(select(SubmittedAlpha))).scalar_one()
+
+    assert experiment_count == 1
+    assert submitted_count == 1
+    assert memory_count == 1
+    assert submitted.alpha_id == "active_alpha"
+    assert submitted.status == "active"
+    assert submitted.fitness == 1.3

@@ -5,9 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_research_miner import (
+from worldquant_harness.wq_legal_inputs import WQLegalInputRegistry
+from worldquant_harness.wq_research_miner import (
     WQResearchMinerConfig,
     build_experience_memory,
+    build_platform_self_correlation_memory,
     run_research_miner,
     screen_candidate_drafts,
 )
@@ -30,6 +32,113 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _legal_registry_file(workdir: Path) -> Path:
+    discovery = workdir / "field_discovery.json"
+    registry_file = workdir / "legal_inputs.json"
+    discovery.write_text(json.dumps({
+        "created_at": "2026-06-21T00:00:00",
+        "user": {"email": "private@example.com"},
+        "combos": [{
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "datasets": {"results": []},
+            "fields_by_dataset": {},
+        }],
+    }), encoding="utf-8")
+    WQLegalInputRegistry.compile_from_discovery(discovery, account="primary").write(registry_file)
+    return registry_file
+
+
+def _coverage_registry_file(workdir: Path) -> Path:
+    discovery = workdir / "coverage_discovery.json"
+    registry_file = workdir / "coverage_legal_inputs.json"
+    fields_by_dataset = {
+        "analyst4": [
+            ("actual_sales_value_quarterly", "analyst", "analyst-analyst-estimates", 1.0),
+        ],
+        "fundamental6": [
+            ("cashflow_op", "fundamental", "fundamental-fundamental-data", 0.5),
+            ("enterprise_value", "fundamental", "fundamental-fundamental-data", 0.5),
+        ],
+        "model77": [
+            ("earnings_revision_magnitude", "model", "model-technical-models", 0.8143),
+            ("forward_sales_to_price", "model", "model-technical-models", 1.0),
+        ],
+        "model16": [
+            ("earnings_certainty_rank_derivative", "model", "model-valuation-models", 1.0),
+        ],
+        "option9": [
+            ("pcr_oi_60", "option", "option-option-analytics", 0.7058),
+        ],
+        "pv1": [
+            ("cap", "pv", "pv-price-volume", 1.0),
+            ("returns", "pv", "pv-price-volume", 1.0),
+            ("volume", "pv", "pv-price-volume", 1.0),
+            ("vwap", "pv", "pv-price-volume", 1.0),
+        ],
+    }
+    discovery.write_text(json.dumps({
+        "created_at": "2026-06-21T00:00:00",
+        "user": {"email": "private@example.com"},
+        "combos": [{
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "datasets": {"results": [
+                {"id": dataset_id, "category": {"id": rows[0][1]}, "subcategory": {"id": rows[0][2]}}
+                for dataset_id, rows in fields_by_dataset.items()
+            ]},
+            "fields_by_dataset": {
+                dataset_id: {"results": [
+                    {
+                        "id": field_id,
+                        "type": "MATRIX",
+                        "dataset": {"id": dataset_id},
+                        "category": {"id": category},
+                        "subcategory": {"id": subcategory},
+                        "region": "USA",
+                        "universe": "TOP3000",
+                        "delay": 1,
+                        "coverage": coverage,
+                    }
+                    for field_id, category, subcategory, coverage in rows
+                ]}
+                for dataset_id, rows in fields_by_dataset.items()
+            },
+        }],
+    }), encoding="utf-8")
+    WQLegalInputRegistry.compile_from_discovery(discovery, account="primary").write(registry_file)
+    return registry_file
+
+
+def _submitted_policy_file(workdir: Path) -> Path:
+    path = workdir / "submission_policy.json"
+    path.write_text(json.dumps({
+        "schema_version": 1,
+        "gates": {"low_priority_reject_below": 0},
+        "submitted_alpha_map": {
+            "schema_version": 1,
+            "overused_anchor_fields": ["returns", "vwap", "volume"],
+            "saturated_fields": [{"field": "returns"}, {"field": "vwap"}, {"field": "volume"}],
+            "risk_control_only_fields": {
+                "returns": {
+                    "max_main_weight": 0.25,
+                    "penalize_if_unweighted": True,
+                },
+            },
+            "gates": {
+                "nearest_similarity_block_above": 0.95,
+                "nearest_similarity_penalize_above": 0.62,
+                "returns_main_anchor_action": "penalize",
+                "saturated_stack_penalty_threshold": 3,
+                "require_fresh_anchor_for_saturated_stack": True,
+            },
+        },
+    }), encoding="utf-8")
+    return path
 
 
 def test_build_experience_memory_distills_success_and_failure_kinds():
@@ -114,7 +223,32 @@ def test_screen_candidate_drafts_blocks_duplicates_and_limits_families(workdir):
         "family_capacity_reached",
     }
     assert selected[0]["no_external_llm"] is True
-    assert selected[0]["candidate_rank"] if "candidate_rank" in selected[0] else True
+    assert selected[0].get("candidate_rank", True)
+
+
+def test_screen_candidate_drafts_filters_illegal_registry_fields(workdir):
+    output = workdir / "candidates.jsonl"
+    config = WQResearchMinerConfig(
+        output=output,
+        legal_inputs_file=_legal_registry_file(workdir),
+        max_family_count=5,
+        max_field_signature_count=5,
+    )
+    drafts = [
+        {"expression": "rank(not_a_real_field)", "tag": "bad-field", "source_family": "legal_test"},
+        {"expression": "rank(ts_rank(rel_momentum, 20))", "tag": "wq-unknown-field", "source_family": "legal_test"},
+        {"expression": "rank(close)", "tag": "good-close", "source_family": "legal_test"},
+    ]
+
+    selected, rejected = screen_candidate_drafts(drafts, [], config=config)
+
+    assert [row["tag"] for row in selected] == ["good-close"]
+    bad = next(row for row in rejected if row["tag"] == "bad-field")
+    assert bad["reject_reason"] == "illegal_field"
+    assert bad["legal_input_validation"]["primary_error_code"] == "illegal_field"
+    unknown = next(row for row in rejected if row["tag"] == "wq-unknown-field")
+    assert unknown["reject_reason"] == "known_invalid_wq_field"
+    assert unknown["invalid_fields"] == ["rel_momentum"]
 
 
 def test_run_research_miner_generates_deterministic_local_candidates(workdir):
@@ -168,6 +302,69 @@ def test_run_research_miner_generates_deterministic_local_candidates(workdir):
     assert all("short_interest" not in row["expression"] for row in generated)
     assert all("short_ratio" not in row["expression"] for row in generated)
     assert all(row["source"] == "wq_research_miner" for row in generated)
+
+
+def test_run_research_miner_loads_active_inventory_jsonl(workdir):
+    active_file = workdir / "active_inventory.jsonl"
+    output = workdir / "generated.jsonl"
+
+    rows = [
+        {"alpha_id": "active1", "expression": "rank(open)", "status": "ACTIVE"},
+        {"alpha_id": "active2", "expression": "rank(close)", "status": "ACTIVE"},
+    ]
+    active_file.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8-sig",
+    )
+
+    summary = run_research_miner(WQResearchMinerConfig(
+        output=output,
+        active_inventory_files=(active_file,),
+        max_candidates=4,
+    ))
+
+    assert summary["ok"] is True
+    assert summary["inputs"]["active_inventory"] == 2
+
+
+def test_research_miner_prioritizes_fresh_anchor_over_platform_memory(workdir):
+    platform_file = workdir / "platform_alphas.jsonl"
+    output = workdir / "generated.jsonl"
+    policy_file = _submitted_policy_file(workdir)
+
+    _write_jsonl(platform_file, [
+        {
+            "alpha_id": f"platform{i}",
+            "expression": (
+                "rank(0.52 * group_rank(ts_mean(ts_rank(vwap / close, 20), 3) "
+                "- ts_rank(returns, 20), subindustry) + 0.28 * ts_rank(cashflow_op / cap, 80) "
+                "+ 0.10 * rank(volume / adv20) - 0.10 * ts_rank(returns, 60))"
+            ),
+            "status": "UNSUBMITTED",
+            "sharpe": 2.0,
+            "fitness": 1.2,
+            "turnover": 0.2,
+        }
+        for i in range(20)
+    ])
+
+    summary = run_research_miner(WQResearchMinerConfig(
+        output=output,
+        platform_files=(platform_file,),
+        submission_policy_file=policy_file,
+        max_candidates=8,
+        similarity_cutoff=0.78,
+        max_family_count=8,
+        max_field_signature_count=4,
+    ))
+
+    generated = _read_jsonl(output)
+
+    assert summary["ok"] is True
+    assert generated[0]["mutation_strategy"] == "fresh_anchor_research_family"
+    assert generated[0]["source_family"].startswith("research_fresh_anchor_")
+    assert all("returns_main_anchor" not in str(row.get("forum_policy_reason") or "") for row in generated[:5])
+    assert not any(row["source_family"].startswith("research_platform_unsubmitted_") for row in generated[:5])
 
 
 def test_run_dirs_load_prior_artifacts_and_platform_memory(workdir):
@@ -286,6 +483,112 @@ def test_screen_candidate_drafts_blocks_historical_rejections(workdir):
     assert rejected[0]["reject_reason"] == "historical_rejected_expression"
 
 
+def test_screen_candidate_drafts_blocks_repeated_distribution_fail_signatures(workdir):
+    output = workdir / "candidates.jsonl"
+    config = WQResearchMinerConfig(output=output, max_candidates=5, max_field_signature_count=5)
+    blocked_rows = [
+        {
+            "alpha_id": "cw1",
+            "expression": "rank(ts_rank(cashflow_op / cap, 80) - ts_rank(returns, 20))",
+            "failed_platform_checks": [{"name": "CONCENTRATED_WEIGHT", "result": "FAIL"}],
+        },
+        {
+            "alpha_id": "cw2",
+            "expression": "rank(ts_rank(cashflow_op / cap, 120) - ts_rank(returns, 40))",
+            "failed_platform_checks": [{"name": "CONCENTRATED_WEIGHT", "result": "FAIL"}],
+        },
+    ]
+    drafts = [
+        {
+            "expression": "rank(ts_rank(cashflow_op / cap, 60) - ts_rank(returns, 30))",
+            "tag": "same-distribution-signature",
+            "source_family": "family_a",
+        },
+        {
+            "expression": "rank(ts_rank(volume, 20) - ts_rank(returns, 20))",
+            "tag": "different-signature",
+            "source_family": "family_b",
+        },
+    ]
+
+    selected, rejected = screen_candidate_drafts(
+        drafts,
+        [],
+        config=config,
+        blocked_rows=blocked_rows,
+    )
+
+    assert [row["tag"] for row in selected] == ["different-signature"]
+    blocked = next(row for row in rejected if row["tag"] == "same-distribution-signature")
+    assert blocked["reject_reason"] == "platform_distribution_signature_risk"
+    assert blocked["historical_distribution_fail_count"] == 2
+
+
+def test_screen_candidate_drafts_blocks_sparse_group_concentration_risk(workdir):
+    output = workdir / "candidates.jsonl"
+    config = WQResearchMinerConfig(
+        output=output,
+        legal_inputs_file=_coverage_registry_file(workdir),
+        max_family_count=5,
+        max_field_signature_count=5,
+    )
+    risky = (
+        "rank(group_rank(0.20 * ts_rank(ts_backfill(actual_sales_value_quarterly, 120) / enterprise_value, 150) + "
+        "0.18 * ts_rank(forward_sales_to_price, 150) + "
+        "0.14 * rank(-1 * earnings_certainty_rank_derivative) + "
+        "0.12 * ts_rank(earnings_revision_magnitude, 120) + "
+        "0.12 * rank(-1 * ts_rank(pcr_oi_60, 90)) - "
+        "0.18 * ts_rank(returns, 130), industry))"
+    )
+    safe_single_sparse = (
+        "rank(0.45 * ts_rank(cashflow_op / cap, 120) + "
+        "0.35 * rank(volume / adv20) - "
+        "0.20 * ts_rank(returns, 100))"
+    )
+
+    selected, rejected = screen_candidate_drafts(
+        [
+            {"expression": risky, "tag": "sparse-group-risk", "source_family": "risk_test"},
+            {"expression": safe_single_sparse, "tag": "single-sparse-with-dispersion", "source_family": "risk_test"},
+        ],
+        [],
+        config=config,
+    )
+
+    assert [row["tag"] for row in selected] == ["single-sparse-with-dispersion"]
+    blocked = next(row for row in rejected if row["tag"] == "sparse-group-risk")
+    assert blocked["reject_reason"] == "concentration_sparse_group_risk"
+    risk = blocked["concentration_risk"]
+    assert "multiple_sparse_legs_with_group_ops" in risk["reasons"]
+    assert risk["estimated_effective_coverage"] == 0.5
+    assert set(risk["sparse_fields"]) >= {"enterprise_value", "pcr_oi_60"}
+
+
+def test_screen_candidate_drafts_requires_broad_leg_for_single_sparse_group(workdir):
+    output = workdir / "candidates.jsonl"
+    config = WQResearchMinerConfig(
+        output=output,
+        legal_inputs_file=_coverage_registry_file(workdir),
+        max_family_count=5,
+        max_field_signature_count=5,
+    )
+
+    selected, rejected = screen_candidate_drafts(
+        [{
+            "expression": "rank(group_rank(ts_rank(cashflow_op, 120) - ts_rank(returns, 80), industry))",
+            "tag": "single-sparse-no-dispersion",
+            "source_family": "risk_test",
+        }],
+        [],
+        config=config,
+    )
+
+    assert selected == []
+    blocked = rejected[0]
+    assert blocked["reject_reason"] == "concentration_sparse_group_risk"
+    assert "single_sparse_group_without_broad_dispersion_leg" in blocked["concentration_risk"]["reasons"]
+
+
 def test_research_miner_uses_weak_active_memory_for_repairs(workdir):
     weak_memory_file = workdir / "weak_active_memory.jsonl"
     output = workdir / "generated.jsonl"
@@ -344,6 +647,92 @@ def test_screen_candidate_drafts_penalizes_weak_active_signatures(workdir):
 
     assert selected == []
     assert rejected[0]["reject_reason"] == "weak_active_signature_risk"
+
+
+def test_platform_self_correlation_memory_extracts_live_anchor_records():
+    failed = [{
+        "alpha_id": "failed1",
+        "expression": "rank(ts_rank(cashflow_op / cap, 80) - ts_rank(returns, 20))",
+        "live_precheck": {
+            "failure_kind": "self_correlation",
+            "review_checks": {
+                "self_correlation": {"name": "SELF_CORRELATION", "result": "FAIL", "value": 0.84, "limit": 0.7},
+            },
+            "is": {
+                "selfCorrelated": {
+                    "schema": {
+                        "properties": [
+                            {"name": "id"},
+                            {"name": "name"},
+                            {"name": "instrumentType"},
+                            {"name": "region"},
+                            {"name": "universe"},
+                            {"name": "correlation"},
+                        ],
+                    },
+                    "records": [["active1", None, "EQUITY", "USA", "TOP3000", 0.84]],
+                },
+            },
+        },
+    }]
+    active = [{
+        "alpha_id": "active1",
+        "expression": "rank(ts_rank(cashflow_op / cap, 100) - ts_rank(returns, 40))",
+        "status": "ACTIVE",
+    }]
+
+    memory = build_platform_self_correlation_memory(failed, active)
+
+    assert {row["blocker_type"] for row in memory} == {"failed_candidate", "active_anchor"}
+    anchor = next(row for row in memory if row["blocker_type"] == "active_anchor")
+    assert anchor["alpha_id"] == "active1"
+    assert anchor["platform_correlation"] == 0.84
+    assert anchor["failure_kind"] == "platform_self_correlation_anchor"
+
+
+def test_screen_candidate_drafts_blocks_platform_anchor_field_overlap(workdir):
+    output = workdir / "candidates.jsonl"
+    config = WQResearchMinerConfig(
+        output=output,
+        max_candidates=5,
+        similarity_cutoff=0.95,
+        max_family_count=5,
+        max_field_signature_count=5,
+        platform_blocker_field_jaccard_cutoff=0.55,
+    )
+    platform_blockers = build_platform_self_correlation_memory(
+        [{
+            "alpha_id": "failed1",
+            "expression": "rank(0.40 * ts_rank(cashflow_op / cap, 80) + 0.30 * ts_rank(forward_sales_to_price, 80) - 0.30 * ts_rank(returns, 40))",
+            "api_check_status": "self_correlation_fail",
+            "sc_value": 0.82,
+        }],
+        [],
+    )
+    drafts = [
+        {
+            "expression": "rank(0.50 * ts_rank(cashflow_op / cap, 120) + 0.25 * ts_rank(forward_sales_to_price, 60) - 0.25 * ts_rank(returns, 20))",
+            "tag": "crowded-cashflow-forward",
+            "source_family": "family_a",
+        },
+        {
+            "expression": "rank(ts_delta(scl12_sentiment_fast_d1, 5))",
+            "tag": "independent-social",
+            "source_family": "family_b",
+        },
+    ]
+
+    selected, rejected = screen_candidate_drafts(
+        drafts,
+        [],
+        config=config,
+        platform_blocker_rows=platform_blockers,
+    )
+
+    assert [row["tag"] for row in selected] == ["independent-social"]
+    blocked = next(row for row in rejected if row["tag"] == "crowded-cashflow-forward")
+    assert blocked["reject_reason"] == "platform_self_correlation_anchor_risk"
+    assert blocked["platform_blocker_match"]["reason"] in {"exact_field_signature", "field_operator_overlap"}
 
 
 def test_screen_candidate_drafts_applies_forum_submission_policy(workdir):

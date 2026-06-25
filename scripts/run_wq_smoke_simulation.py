@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.expression_parser import parse_expression
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_single_simulation
+from worldquant_harness.expression_parser import parse_expression
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_single_simulation
 
 
 def _load_dotenv():
@@ -75,7 +75,7 @@ def main() -> int:
     parser.add_argument("--neutralization", default="SUBINDUSTRY")
     parser.add_argument("--truncation", type=float, default=0.08)
     parser.add_argument("--auto-submit", action="store_true")
-    parser.add_argument("--tag", default="quantgpt-smoke")
+    parser.add_argument("--tag", default="worldquant_harness-smoke")
     parser.add_argument("--output", required=True)
     parser.add_argument("--status-file")
     args = parser.parse_args()

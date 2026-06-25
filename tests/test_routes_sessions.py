@@ -4,8 +4,8 @@ import uuid
 
 import pytest
 
-from quantgpt.auth import create_access_token
-from quantgpt.models import User
+from worldquant_harness.auth import create_access_token
+from worldquant_harness.models import User
 
 pytestmark = pytest.mark.asyncio
 

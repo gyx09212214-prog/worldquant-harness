@@ -24,19 +24,19 @@ const ColorModeContext = createContext<ColorModeContextValue>({
 
 export function ColorModeProvider({ children }: { children: ReactNode }) {
   const [colorMode, setColorMode] = useState<ColorMode>(() => {
-    return (localStorage.getItem("quantgpt_color_mode") as ColorMode) ?? "cn";
+    return (localStorage.getItem("worldquant_harness_color_mode") as ColorMode) ?? "cn";
   });
 
   const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem("quantgpt_dark_mode") === "true";
+    return localStorage.getItem("worldquant_harness_dark_mode") === "true";
   });
 
   useEffect(() => {
-    localStorage.setItem("quantgpt_color_mode", colorMode);
+    localStorage.setItem("worldquant_harness_color_mode", colorMode);
   }, [colorMode]);
 
   useEffect(() => {
-    localStorage.setItem("quantgpt_dark_mode", String(isDark));
+    localStorage.setItem("worldquant_harness_dark_mode", String(isDark));
   }, [isDark]);
 
   const toggleColorMode = () => setColorMode((m) => (m === "cn" ? "us" : "cn"));

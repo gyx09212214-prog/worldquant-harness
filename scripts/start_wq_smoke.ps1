@@ -6,13 +6,14 @@ param(
     [string]$Neutralization = "SUBINDUSTRY",
     [int]$Decay = 0,
     [double]$Truncation = 0.08,
-    [string]$Tag = "quantgpt-smoke"
+    [string]$Tag = "worldquant_harness-smoke"
 )
 
 $ErrorActionPreference = "Stop"
 
-$Root = "D:\code\external\QuantGPT"
-$Python = "C:\Users\guoyx\AppData\Local\Programs\Python\Python313\python.exe"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ScriptDir
+$Python = if ($env:PYTHON) { $env:PYTHON } else { "python" }
 $Launcher = Join-Path $Root "scripts\start_wq_smoke_job.py"
 
 & $Python $Launcher `

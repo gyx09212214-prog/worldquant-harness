@@ -1,10 +1,10 @@
 [package]
-name = "quantgpt-engine"
+name = "worldquant-harness-engine"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "quantgpt_engine"
+name = "worldquant_harness_engine"
 crate-type = ["cdylib"]
 
 [dependencies]

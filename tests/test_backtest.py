@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quantgpt.backtest import (
+from worldquant_harness.backtest import (
     _calc_max_drawdown,
     _calc_monotonicity,
     run_factor_backtest,
@@ -233,7 +233,7 @@ class TestPrecomputedFactorAlignment:
     """Regression: precomputed_factor must align by index, not position."""
 
     def test_shuffled_index_aligns_correctly(self, market_df):
-        from quantgpt.backtest import api_context
+        from worldquant_harness.backtest import api_context
 
         df = market_df.copy()
         df["trade_date"] = pd.to_datetime(df["trade_date"])

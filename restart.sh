@@ -32,8 +32,8 @@ echo "Building frontend..."
 cd frontend && npm run build --silent && cd ..
 
 # Start server
-echo "Starting QuantGPT on :8003..."
+echo "Starting worldquant-harness on :8003..."
 mkdir -p logs
-nohup python3 -m quantgpt --transport http > logs/server.log 2>&1 &
+nohup python3 -m worldquant_harness --transport http > logs/server.log 2>&1 &
 echo "PID: $!"
 echo "Logs: logs/server.log"

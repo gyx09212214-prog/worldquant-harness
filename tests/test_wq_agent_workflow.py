@@ -5,19 +5,22 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_agent_workflow import (
+from worldquant_harness.wq_agent_workflow import (
     CONFIRMED_READY,
     HARD_FAIL,
+    INFRA_TIMEOUT,
     NEAR_MISS_REPAIR,
     SUBMIT_PROBE_NEEDED,
     WQAgentWorkflowConfig,
     _filter_candidate_pool_for_presubmit,
     classify_review_row,
+    classify_simulation_result,
     presubmit_acceptance_gate,
     run_workflow,
     select_presubmit_ready_candidate,
     select_submission_candidates,
 )
+from worldquant_harness.wq_legal_inputs import WQLegalInputRegistry
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -27,6 +30,24 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _legal_registry_file(workdir: Path) -> Path:
+    discovery = workdir / "field_discovery.json"
+    registry_file = workdir / "legal_inputs.json"
+    discovery.write_text(json.dumps({
+        "created_at": "2026-06-21T00:00:00",
+        "user": {"email": "private@example.com"},
+        "combos": [{
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "datasets": {"results": []},
+            "fields_by_dataset": {},
+        }],
+    }), encoding="utf-8")
+    WQLegalInputRegistry.compile_from_discovery(discovery, account="primary").write(registry_file)
+    return registry_file
 
 
 @pytest.fixture
@@ -85,6 +106,28 @@ def test_classify_review_row_distinguishes_ready_probe_and_failures():
         )
     )
     assert platform_near_miss["triage_bucket"] == NEAR_MISS_REPAIR
+
+    metric_threshold_near_miss = classify_review_row(
+        _source_row(
+            status="failed_platform_check",
+            fitness=0.99,
+            failed_platform_checks=[{"name": "LOW_FITNESS", "result": "FAIL", "value": 0.99, "limit": 1.0}],
+        )
+    )
+    assert metric_threshold_near_miss["triage_bucket"] == NEAR_MISS_REPAIR
+
+
+def test_simulation_polling_timeout_is_retryable_infra_bucket():
+    simulated = classify_simulation_result(
+        {"expression": "rank(close)", "candidate_rank": 1, "tag": "timeout-test"},
+        {"ok": False, "error": "WQ simulation polling timeout (2min)"},
+    )
+
+    reviewed = classify_review_row(simulated)
+
+    assert simulated["status"] == "simulation_timeout"
+    assert reviewed["triage_bucket"] == INFRA_TIMEOUT
+    assert "retry" in reviewed["triage_reason"]
 
 
 def test_select_submission_candidates_requires_authorization_for_probe():
@@ -324,6 +367,96 @@ def test_no_model_candidate_design_prioritizes_repair_queue(workdir):
     assert candidates[0]["source"] == str(run_dir / "repair_queue.jsonl")
 
 
+def test_repair_queue_candidate_design_blocks_sparse_group_risk(workdir):
+    run_dir = workdir / "repair_sparse_guard"
+    _write_jsonl(
+        run_dir / "repair_queue.jsonl",
+        [{
+            "alpha_id": "bad_sparse",
+            "candidate_records": [
+                {
+                    "expression": (
+                        "rank(group_rank(ts_rank(actual_eps_value_quarterly / enterprise_value, 120) + "
+                        "rank(-1 * ts_rank(pcr_oi_60, 80)), industry))"
+                    ),
+                    "tag": "repair-bad-sparse",
+                    "source_family": "repair_self_corr_generic_orthogonal",
+                    "repair_priority_score": 99,
+                },
+                {
+                    "expression": "rank(0.45 * ts_rank(forward_sales_to_price, 120) + 0.25 * rank(ts_corr(vwap, volume, 80)))",
+                    "tag": "repair-safe-forward-sales",
+                    "source_family": "repair_self_corr_generic_orthogonal",
+                    "repair_priority_score": 70,
+                },
+            ],
+        }],
+    )
+
+    config = WQAgentWorkflowConfig(
+        output_dir=run_dir,
+        no_model=True,
+        target_candidates=2,
+        max_simulations=0,
+        fallback_template_limit=0,
+        dry_run=True,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="run",
+        dependencies={"list_alphas": lambda config: []},
+    )
+
+    candidates = _read_jsonl(config.output_dir / "candidate_pool.jsonl")
+    assert summary["candidate_design"]["repair_candidates"] == 1
+    assert [row["tag"] for row in candidates] == ["repair-safe-forward-sales"]
+
+
+def test_repair_queue_candidate_design_blocks_settings_only_retests(workdir):
+    run_dir = workdir / "repair_settings_guard"
+    _write_jsonl(
+        run_dir / "repair_queue.jsonl",
+        [{
+            "alpha_id": "metric_near",
+            "candidate_records": [
+                {
+                    "expression": "rank(ts_decay_linear(group_neutralize(ts_rank(cashflow_op / cap, 60), industry), 5))",
+                    "tag": "repair-metric-smooth-industry",
+                    "source_family": "repair_metric_threshold_smoothing",
+                    "mutation_strategy": "metric_near_miss_smooth_group_neutralize",
+                    "repair_priority_score": 90,
+                },
+                {
+                    "expression": "rank(ts_rank(cashflow_op / cap, 60))",
+                    "tag": "repair-metric-retest-decay12-trunc005",
+                    "source_family": "repair_metric_threshold_settings",
+                    "mutation_strategy": "metric_near_miss_decay_truncation_retest",
+                    "repair_priority_score": 80,
+                },
+            ],
+        }],
+    )
+
+    config = WQAgentWorkflowConfig(
+        output_dir=run_dir,
+        no_model=True,
+        target_candidates=2,
+        max_simulations=0,
+        fallback_template_limit=0,
+        dry_run=True,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="run",
+        dependencies={"list_alphas": lambda config: []},
+    )
+
+    assert summary["candidate_design"]["repair_candidates"] == 0
+    assert _read_jsonl(config.output_dir / "candidate_pool.jsonl") == []
+
+
 def test_evolutionary_generation_mode_feeds_existing_candidate_pool(workdir):
     candidates = workdir / "seed_candidates.jsonl"
     _write_jsonl(candidates, [{"expression": "rank(volume / adv20)", "tag": "liquidity-seed"}])
@@ -495,6 +628,117 @@ def test_candidate_settings_variants_are_not_deduped(workdir):
     assert results[1]["effective_simulation_settings"]["maxPosition"] == "ON"
     pool = _read_jsonl(config.output_dir / "candidate_pool.jsonl")
     assert [row.get("tag") for row in pool] == ["base", "low-trunc"]
+
+
+def test_simulation_records_actual_setting_mismatches(workdir):
+    candidates = workdir / "settings_mismatch_candidates.jsonl"
+    _write_jsonl(
+        candidates,
+        [{
+            "expression": "rank(open)",
+            "tag": "max-position-requested",
+            "simulation_settings": {"truncation": 0.05, "maxPosition": "ON"},
+        }],
+    )
+
+    def fake_simulate(candidate, config):
+        return {
+            "ok": True,
+            "alpha_id": "sim_mismatch",
+            "is_metrics": {
+                "sharpe": 0.5,
+                "fitness": 0.2,
+                "returns": 0.01,
+                "turnover": 0.25,
+                "checks": [],
+            },
+            "settings": {"truncation": 0.05, "maxPosition": "OFF"},
+            "submit_eligible": False,
+            "submitted": False,
+        }
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "settings_mismatch",
+        candidate_files=[candidates],
+        target_candidates=1,
+        max_simulations=1,
+        fallback_template_limit=0,
+        no_model=True,
+        run_checks=False,
+        use_ledger=False,
+    )
+    run_workflow(
+        config,
+        mode="run",
+        dependencies={
+            "list_alphas": lambda config: [],
+            "simulate": fake_simulate,
+        },
+    )
+
+    result = _read_jsonl(config.output_dir / "simulation_results.jsonl")[0]
+    assert result["actual_simulation_settings"]["maxPosition"] == "OFF"
+    assert result["simulation_setting_mismatches"] == [{
+        "key": "maxPosition",
+        "requested": "ON",
+        "actual": "OFF",
+    }]
+
+
+def test_no_platform_candidates_keeps_file_only_pool(workdir):
+    candidates = workdir / "file_only_candidates.jsonl"
+    _write_jsonl(candidates, [{"expression": "rank(open)", "tag": "file-candidate"}])
+
+    def fake_list_alphas(config):
+        return [
+            {
+                "alpha_id": "platform1",
+                "expression": "rank(volume)",
+                "status": "UNSUBMITTED",
+                "sharpe": 2.0,
+                "fitness": 1.5,
+                "turnover": 0.2,
+            }
+        ]
+
+    def fake_simulate(candidate, config):
+        return {
+            "ok": True,
+            "alpha_id": "file_alpha",
+            "is_metrics": {
+                "sharpe": 0.5,
+                "fitness": 0.2,
+                "returns": 0.01,
+                "turnover": 0.25,
+                "checks": [],
+            },
+            "submit_eligible": False,
+            "submitted": False,
+        }
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "no_platform_candidates",
+        candidate_files=[candidates],
+        target_candidates=3,
+        max_simulations=3,
+        fallback_template_limit=0,
+        no_model=True,
+        include_platform_candidates=False,
+        run_checks=False,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="run",
+        dependencies={
+            "list_alphas": fake_list_alphas,
+            "simulate": fake_simulate,
+        },
+    )
+
+    pool = _read_jsonl(config.output_dir / "candidate_pool.jsonl")
+    assert [row["tag"] for row in pool] == ["file-candidate"]
+    assert summary["candidate_design"]["platform_candidates"] == 0
 
 
 def test_pnl_enrichment_prioritizes_temporally_stable_ready_candidates(workdir):
@@ -670,13 +914,19 @@ def test_run_submit_loop_submits_until_target(workdir):
     submitted = _read_jsonl(config.output_dir / "submitted_accumulator.jsonl")
     assert [row["alpha_id"] for row in submitted] == ["alpha_1", "alpha_2"]
     assert (config.output_dir / "cycles" / "cycle_001" / "summary.json").is_file()
+    assert summary["post_submit_review"]["ok"] is True
+    assert (config.output_dir / "post_submit_review" / "alpha_labels.jsonl").is_file()
 
 
 def test_run_submit_loop_stops_at_total_simulation_cap(workdir):
     submit_calls = []
+    model_batches = iter([
+        [{"expression": "rank(open)"}, {"expression": "rank(close)"}],
+        [{"expression": "rank(high)"}, {"expression": "rank(low)"}],
+    ])
 
     def fake_model(prompt, config):
-        return [{"expression": "rank(open)"}, {"expression": "rank(close)"}]
+        return next(model_batches)
 
     def fake_simulate(candidate, config):
         return {
@@ -715,6 +965,116 @@ def test_run_submit_loop_stops_at_total_simulation_cap(workdir):
     assert loop["submitted_successes"] == 0
     assert loop["total_simulations"] == 3
     assert submit_calls == []
+
+
+def test_run_submit_loop_skips_seed_rejected_expressions(workdir):
+    rejected_file = workdir / "historical_rejected.jsonl"
+    _write_jsonl(rejected_file, [{"expression": "rank(open)", "alpha_id": "old_fail"}])
+    simulated = []
+
+    def fake_model(prompt, config):
+        return [{"expression": "rank(open)"}, {"expression": "rank(close)"}]
+
+    def fake_simulate(candidate, config):
+        simulated.append(candidate["expression"])
+        return {
+            "ok": True,
+            "alpha_id": "weak_close",
+            "is_metrics": {"sharpe": 0.5, "fitness": 0.2, "returns": 0.01, "turnover": 0.25, "checks": []},
+            "submit_eligible": False,
+            "submitted": False,
+        }
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "run_submit_seed_rejected",
+        seed_rejected_files=[rejected_file],
+        target_submissions=1,
+        max_total_simulations=1,
+        cycle_candidate_count=1,
+        max_simulations=1,
+        max_cycles=1,
+        run_checks=False,
+        fallback_template_limit=0,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="run-submit",
+        dependencies={
+            "list_alphas": lambda config: [],
+            "model_generate_candidates": fake_model,
+            "simulate": fake_simulate,
+            "submit_by_ids": lambda ids, config: {},
+        },
+    )
+
+    cycle = summary["run_submit_loop"]["cycles"][0]
+    assert simulated == ["rank(close)"]
+    assert cycle["candidate_skip"]["skip_reasons"] == {"previous_presubmit_rejection": 1}
+
+
+def test_presubmit_sequential_skips_seed_rejected_expressions(workdir):
+    rejected_file = workdir / "historical_presubmit_rejected.jsonl"
+    _write_jsonl(rejected_file, [{"expression": "rank(open)", "alpha_id": "old_presubmit_fail"}])
+    simulated = []
+
+    def fake_model(prompt, config):
+        return [
+            {"expression": "rank(open)", "source_family": "price_level"},
+            {"expression": "rank(close)", "source_family": "price_level"},
+        ]
+
+    def fake_simulate(candidate, config):
+        simulated.append(candidate["expression"])
+        return {
+            "ok": True,
+            "alpha_id": "alpha_close",
+            "is_metrics": {
+                "sharpe": 1.8,
+                "fitness": 1.2,
+                "returns": 0.12,
+                "turnover": 0.25,
+                "checks": [{"name": "SELF_CORRELATION", "result": "PENDING"}],
+            },
+            "submit_eligible": True,
+            "submitted": False,
+        }
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "presubmit_seed_rejected",
+        seed_rejected_files=[rejected_file],
+        target_ready=1,
+        max_total_simulations=1,
+        cycle_candidate_count=1,
+        max_simulations=1,
+        max_cycles=1,
+        fallback_template_limit=0,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="presubmit-sequential",
+        dependencies={
+            "list_alphas": lambda config: [],
+            "model_generate_candidates": fake_model,
+            "simulate": fake_simulate,
+            "check_submissions": lambda ids, config: {
+                "alpha_close": {
+                    "status": "UNSUBMITTED",
+                    "sharpe": 1.8,
+                    "fitness": 1.2,
+                    "turnover": 0.25,
+                    "sc_result": "PASS",
+                    "sc_value": 0.52,
+                    "prod_corr_result": "MISSING",
+                }
+            },
+        },
+    )
+
+    cycle = summary["presubmit_loop"]["cycles"][0]
+    assert simulated == ["rank(close)"]
+    assert cycle["candidate_skip"]["skip_reasons"] == {"previous_presubmit_rejection": 1}
 
 
 def test_run_submit_loop_probe_submission_requires_flag(workdir):
@@ -939,7 +1299,64 @@ def test_presubmit_accepts_missing_platform_status_when_candidate_is_not_submitt
     assert summary["presubmit_loop"]["ready_count"] == 1
 
 
-def test_presubmit_sequential_rejects_passed_check_when_sc_value_exceeds_strict_cutoff(workdir):
+def test_presubmit_sequential_accepts_platform_pass_without_local_sc_cutoff(workdir):
+    def fake_model(prompt, config):
+        return [{"expression": "rank(open)", "source_family": "price_level"}]
+
+    def fake_simulate(candidate, config):
+        return {
+            "ok": True,
+            "alpha_id": "alpha_high_sc",
+            "is_metrics": {
+                "sharpe": 2.0,
+                "fitness": 1.35,
+                "returns": 0.14,
+                "turnover": 0.3,
+                "checks": [{"name": "SELF_CORRELATION", "result": "PENDING"}],
+            },
+            "submit_eligible": True,
+            "submitted": False,
+        }
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "presubmit_platform_pass_sc",
+        target_ready=1,
+        max_total_simulations=1,
+        cycle_candidate_count=1,
+        max_simulations=1,
+        max_cycles=1,
+        virtual_similarity_cutoff=1.0,
+        fallback_template_limit=0,
+        use_ledger=False,
+    )
+    summary = run_workflow(
+        config,
+        mode="presubmit-sequential",
+        dependencies={
+            "list_alphas": lambda config: [],
+            "model_generate_candidates": fake_model,
+            "simulate": fake_simulate,
+            "check_submissions": lambda ids, config: {
+                "alpha_high_sc": {
+                    "status": "UNSUBMITTED",
+                    "sharpe": 2.0,
+                    "fitness": 1.35,
+                    "turnover": 0.3,
+                    "sc_result": "PASS",
+                    "sc_value": 0.7961,
+                    "prod_corr_result": "MISSING",
+                }
+            },
+        },
+    )
+
+    assert summary["ok"] is True
+    assert summary["presubmit_loop"]["ready_count"] == 1
+    ready = _read_jsonl(config.output_dir / "presubmit_ready_sequential.jsonl")
+    assert ready[0]["alpha_id"] == "alpha_high_sc"
+
+
+def test_presubmit_sequential_rejects_passed_check_when_explicit_sc_cutoff_exceeded(workdir):
     def fake_model(prompt, config):
         return [{"expression": "rank(open)", "source_family": "price_level"}]
 
@@ -966,6 +1383,7 @@ def test_presubmit_sequential_rejects_passed_check_when_sc_value_exceeds_strict_
         max_simulations=1,
         max_cycles=1,
         virtual_similarity_cutoff=1.0,
+        presubmit_self_correlation_cutoff=0.7,
         fallback_template_limit=0,
         use_ledger=False,
     )
@@ -1068,6 +1486,77 @@ def test_presubmit_candidate_filter_applies_submission_policy(workdir):
     assert kept[0]["forum_policy_action"] == "allow"
 
 
+def test_presubmit_candidate_filter_blocks_sparse_group_distribution_risk(workdir):
+    candidate_file = workdir / "candidate_pool.jsonl"
+    _write_jsonl(
+        candidate_file,
+        [
+            {
+                "expression": (
+                    "rank(group_rank(0.45 * ts_rank(cashflow_op / cap, 80) + "
+                    "0.30 * ts_rank(cashflow / cap, 80) - "
+                    "0.25 * ts_rank(cashflow_fin / cap, 80), industry))"
+                ),
+                "tag": "bad-cashflow-stack",
+            },
+            {
+                "expression": (
+                    "rank(0.45 * ts_rank(cashflow_op / cap, 80) + "
+                    "0.25 * rank(volume / adv20) - 0.20 * ts_rank(returns, 20))"
+                ),
+                "tag": "cashflow-with-dispersion",
+            },
+        ],
+    )
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "presubmit_sparse_guard",
+        max_virtual_family_count=10,
+        max_virtual_field_signature_count=10,
+    )
+
+    summary = _filter_candidate_pool_for_presubmit(
+        candidate_file,
+        skip_normalized_expressions=set(),
+        active_rows=[],
+        config=config,
+    )
+
+    kept = _read_jsonl(candidate_file)
+    assert summary["kept"] == 1
+    assert summary["skip_reasons"] == {"sparse_group_distribution_risk": 1}
+    assert kept[0]["tag"] == "cashflow-with-dispersion"
+
+
+def test_presubmit_candidate_filter_applies_legal_inputs(workdir):
+    candidate_file = workdir / "candidate_pool.jsonl"
+    _write_jsonl(
+        candidate_file,
+        [
+            {"expression": "rank(not_a_real_field)", "tag": "bad-field"},
+            {"expression": "rank(close)", "tag": "good-close"},
+        ],
+    )
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "presubmit_legal_inputs",
+        legal_inputs_file=_legal_registry_file(workdir),
+        max_virtual_family_count=10,
+        max_virtual_field_signature_count=10,
+    )
+
+    summary = _filter_candidate_pool_for_presubmit(
+        candidate_file,
+        skip_normalized_expressions=set(),
+        active_rows=[],
+        config=config,
+    )
+
+    kept = _read_jsonl(candidate_file)
+    assert summary["kept"] == 1
+    assert summary["skip_reasons"] == {"illegal_field": 1}
+    assert kept[0]["tag"] == "good-close"
+    assert kept[0]["legal_input_validation"]["ok"] is True
+
+
 def test_presubmit_acceptance_gate_blocks_direct_forum_template(workdir):
     policy_file = workdir / "submission_policy.json"
     policy_file.write_text(json.dumps({
@@ -1102,6 +1591,35 @@ def test_presubmit_acceptance_gate_blocks_direct_forum_template(workdir):
     assert ok is False
     assert reason == "forum_direct_template_risk"
     assert gate["forum_policy"]["action"] == "block"
+
+
+def test_presubmit_acceptance_gate_blocks_high_daily_return_correlation(workdir):
+    row = {
+        "alpha_id": "alpha_daily_corr",
+        "expression": "rank(ts_rank(cashflow_op, 120))",
+        "source_family": "cashflow_quality",
+        "triage_bucket": CONFIRMED_READY,
+        "api_check_status": "api_check_readable",
+        "platform_status": "UNSUBMITTED",
+        "sharpe": 1.9,
+        "fitness": 1.3,
+        "turnover": 0.25,
+        "sc_result": "PASS",
+        "sc_value": 0.42,
+        "prod_corr_result": "PASS",
+        "failed_platform_checks": [],
+        "active_daily_return_corr_max": 0.81,
+    }
+
+    ok, reason, gate = presubmit_acceptance_gate(
+        row,
+        [],
+        config=WQAgentWorkflowConfig(output_dir=workdir / "presubmit_daily_corr"),
+    )
+
+    assert ok is False
+    assert reason == "daily_return_correlation_above_cutoff"
+    assert gate["active_daily_return_corr_max"] == 0.81
 
 
 def test_presubmit_sequential_screens_against_virtual_active_similarity(workdir):

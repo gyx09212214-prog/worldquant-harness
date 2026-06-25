@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-$Root = "D:\code\external\QuantGPT"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ScriptDir
 $StatusPath = Join-Path $Root "logs\wq_smoke_latest.json"
 
 if (-not (Test-Path -LiteralPath $StatusPath)) {

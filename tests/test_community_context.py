@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from quantgpt.community_context import CommunityContext, resolve_cache_path, retrieve_community_context
+from worldquant_harness.community_context import CommunityContext, resolve_cache_path, retrieve_community_context
 
 
 def _write_jsonl(path: Path, rows: list[dict]):

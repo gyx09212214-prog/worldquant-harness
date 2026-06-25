@@ -1,6 +1,6 @@
-// QuantGPT Backtest Engine (Rust)
+// worldquant-harness Backtest Engine (Rust)
 // Copyright (c) 2026 Miasyster. Licensed under the MIT License.
-// https://github.com/Miasyster/QuantGPT
+// https://github.com/gyx09212214-prog/worldquant-harness
 
 use std::collections::{HashMap, HashSet};
 use super::grouping::assign_groups;

@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from quantgpt.wq_simulate import _calc_wq_rating, _run_is_tests, _sub_universe_sharpe, wq_simulate
+from worldquant_harness.wq_simulate import _calc_wq_rating, _run_is_tests, _sub_universe_sharpe, wq_simulate
 
 
 def _make_work_df(n_stocks=20, n_days=60, seed=42):

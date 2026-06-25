@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from quantgpt.wq_brain_client import WQBrainClient
+from worldquant_harness.wq_brain_client import WQBrainClient
 
 
 def _response(status_code: int, payload: dict):

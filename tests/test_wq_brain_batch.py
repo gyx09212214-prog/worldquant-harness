@@ -80,37 +80,41 @@ class TestBatchSubmitValidation:
 
 class TestBatchSubmitCreatesTask:
     async def test_creates_task_with_defaults(self, client, test_user, auth_headers):
-        with patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}):
-            with patch("quantgpt.routes.wq_brain_batch._run_batch_task"):
-                resp = await client.post("/api/v1/wq-brain/batch-submit", json={
-                    "expression": "rank(close)",
-                    "tag": "test-agent",
-                }, headers=auth_headers)
-                assert resp.status_code == 202
-                data = resp.json()
-                assert "task_id" in data
-                assert data["status"] == "pending"
-                assert data["total_combinations"] == 1
+        with (
+            patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}),
+            patch("worldquant_harness.routes.wq_brain_batch._run_batch_task"),
+        ):
+            resp = await client.post("/api/v1/wq-brain/batch-submit", json={
+                "expression": "rank(close)",
+                "tag": "test-agent",
+            }, headers=auth_headers)
+            assert resp.status_code == 202
+            data = resp.json()
+            assert "task_id" in data
+            assert data["status"] == "pending"
+            assert data["total_combinations"] == 1
 
     async def test_creates_task_with_sweep(self, client, test_user, auth_headers):
-        with patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}):
-            with patch("quantgpt.routes.wq_brain_batch._run_batch_task"):
-                resp = await client.post("/api/v1/wq-brain/batch-submit", json={
-                    "expression": "rank(close/open)",
-                    "tag": "test-agent",
-                    "regions": ["USA"],
-                    "delays": [0, 1],
-                    "universes": ["TOP3000"],
-                    "neutralizations": ["SUBINDUSTRY", "MARKET"],
-                }, headers=auth_headers)
-                assert resp.status_code == 202
-                data = resp.json()
-                assert data["total_combinations"] == 1 * 2 * 1 * 2
+        with (
+            patch.dict(os.environ, {"WQ_BRAIN_EMAIL": "a@b.com", "WQ_BRAIN_PASSWORD": "pw"}),
+            patch("worldquant_harness.routes.wq_brain_batch._run_batch_task"),
+        ):
+            resp = await client.post("/api/v1/wq-brain/batch-submit", json={
+                "expression": "rank(close/open)",
+                "tag": "test-agent",
+                "regions": ["USA"],
+                "delays": [0, 1],
+                "universes": ["TOP3000"],
+                "neutralizations": ["SUBINDUSTRY", "MARKET"],
+            }, headers=auth_headers)
+            assert resp.status_code == 202
+            data = resp.json()
+            assert data["total_combinations"] == 1 * 2 * 1 * 2
 
 
 class TestBatchRequestModel:
     def test_defaults(self):
-        from quantgpt.routes.wq_brain_batch import WQBrainBatchRequest
+        from worldquant_harness.routes.wq_brain_batch import WQBrainBatchRequest
         req = WQBrainBatchRequest(expression="rank(close)", tag="test")
         assert req.regions == ["USA"]
         assert req.delays == [1]
@@ -122,7 +126,7 @@ class TestBatchRequestModel:
         assert req.tag == "test"
 
     def test_custom_values(self):
-        from quantgpt.routes.wq_brain_batch import WQBrainBatchRequest
+        from worldquant_harness.routes.wq_brain_batch import WQBrainBatchRequest
         req = WQBrainBatchRequest(
             expression="ts_mean(close, 5)",
             tag="test-sweep",

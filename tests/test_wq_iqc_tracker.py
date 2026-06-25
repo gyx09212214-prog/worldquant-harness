@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from quantgpt.wq_iqc_tracker import TrackerConfig, build_novelty_audit, build_tracker, write_tracker_outputs
+from worldquant_harness.wq_iqc_tracker import TrackerConfig, build_novelty_audit, build_tracker, write_tracker_outputs
 
 
 def _write_json(path: Path, payload: dict) -> None:

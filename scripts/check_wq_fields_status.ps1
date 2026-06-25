@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$Root = "D:\code\external\QuantGPT"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ScriptDir
 $StatusPath = Join-Path $Root "logs\wq_discover_fields_latest.json"
 
 if (-not (Test-Path -LiteralPath $StatusPath)) {

@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_research_harness import (
+from worldquant_harness.wq_research_harness import (
     WQHarnessEvalConfig,
     WQHarnessEvolutionConfig,
     evolve_wq_research_experiment,
     run_wq_harness_evaluation,
 )
-from quantgpt.wq_research_sandbox import new_research_experiment
+from worldquant_harness.wq_research_sandbox import new_research_experiment
 
 
 @pytest.fixture
@@ -174,6 +174,29 @@ def test_harness_evaluation_writes_core_metrics_and_artifacts(workdir):
     assert saved["submit_stats"]["active_alpha_ids"] == ["s1", "s3"]
 
 
+def test_harness_counts_illegal_input_rejections(workdir):
+    exp_dir, submit_dir = _seed_evaluated_experiment(workdir)
+    loop_status = _read_json(exp_dir / "presubmit_run" / "loop_status.json")
+    loop_status["cycles"][0]["candidate_skip"]["skip_reasons"]["illegal_field"] = 2
+    loop_status["cycles"][0]["candidate_skip"]["skip_reasons"]["illegal_field_type"] = 1
+    _write_json(exp_dir / "presubmit_run" / "loop_status.json", loop_status)
+
+    result = run_wq_harness_evaluation(
+        WQHarnessEvalConfig(
+            experiment=exp_dir,
+            submit_run_dirs=(submit_dir,),
+            eval_id="eval-illegal-inputs",
+        )
+    )
+
+    metrics = result["metrics"]
+    assert metrics["total_rejection_count"] == 8
+    assert metrics["illegal_input_reject_count"] == 3
+    assert metrics["illegal_input_reject_share"] == round(3 / 8, 6)
+    assert metrics["invalid_field_reject_count"] == 2
+    assert metrics["illegal_field_type_reject_count"] == 1
+
+
 def test_harness_evolution_creates_child_generation_with_rule_based_overrides(workdir):
     exp_dir, submit_dir = _seed_evaluated_experiment(workdir)
     eval_result = run_wq_harness_evaluation(
@@ -198,6 +221,9 @@ def test_harness_evolution_creates_child_generation_with_rule_based_overrides(wo
     assert mine_config["max_field_signature_count"] == 3
     assert "low_overlap_field_family" in mine_config["priority_biases"]
     assert next_gen["field_signature_blacklist"] == ["open"]
+    assert next_gen["recommended_profile_candidate"] in {"candidate_a", "candidate_b", "candidate_c"}
+    assert "profile_evolution" in next_gen
+    assert next_gen["recommended_research_profile"]["mine_defaults"]["no_real_submit"] is True
     assert (Path(eval_result["eval_dir"]) / "evolution_result.json").is_file()
     assert (Path(eval_result["eval_dir"]) / "reflector_report.md").is_file()
 
@@ -205,3 +231,5 @@ def test_harness_evolution_creates_child_generation_with_rule_based_overrides(wo
     child_record = _read_json(Path(child["experiment"]))
     assert child_record["evolution"]["parent_experiment_id"] == _read_json(exp_dir / "experiment.yaml")["id"]
     assert child_record["suggested_mine_config"]["no_real_submit"] is True
+    assert child_record["research_profile"]["mine_defaults"]["no_real_submit"] is True
+    assert child_record["profile_evolution"]["recommended_candidate"] == next_gen["recommended_profile_candidate"]

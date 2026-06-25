@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from quantgpt.wq_iqc_tracker import main
+from worldquant_harness.wq_iqc_tracker import main
 
 
 if __name__ == "__main__":

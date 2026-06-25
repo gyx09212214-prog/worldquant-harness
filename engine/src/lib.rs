@@ -1,6 +1,6 @@
-// QuantGPT Rust Engine
+// worldquant-harness Rust Engine
 // Copyright (c) 2026 Miasyster. Licensed under the MIT License.
-// https://github.com/Miasyster/QuantGPT
+// https://github.com/gyx09212214-prog/worldquant-harness
 
 mod expression;
 mod operators;
@@ -167,7 +167,7 @@ fn compute_metrics<'py>(
 }
 
 #[pymodule]
-fn quantgpt_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn worldquant_harness_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(eval_expression, m)?)?;
     m.add_function(wrap_pyfunction!(parse_expression_ast, m)?)?;
     m.add_function(wrap_pyfunction!(run_factor_backtest, m)?)?;

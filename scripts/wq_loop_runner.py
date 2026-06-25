@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.expression_parser import parse_expression
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_single_simulation
+from worldquant_harness.expression_parser import parse_expression
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_single_simulation
 
 
 @dataclass(frozen=True)

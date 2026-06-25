@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_pnl_analysis import analyze_probe_directory, write_pnl_analysis_artifacts
+from worldquant_harness.wq_pnl_analysis import analyze_probe_directory, write_pnl_analysis_artifacts
 
 
 def main(argv: list[str] | None = None) -> int:

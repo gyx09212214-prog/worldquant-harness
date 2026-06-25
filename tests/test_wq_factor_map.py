@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from quantgpt.models import WQAlphaExperiment, WQFailureMemory
-from quantgpt.wq_factor_map import FactorMapConfig, build_factor_map, build_similarity_edges
+from worldquant_harness.models import WQAlphaExperiment, WQFailureMemory
+from worldquant_harness.wq_factor_map import FactorMapConfig, build_factor_map, build_similarity_edges
 
 
 @pytest.mark.asyncio
@@ -106,7 +106,7 @@ async def test_build_factor_map_merges_sources_and_writes_artifacts(db_session, 
     assert (output_dir / "edges.jsonl").is_file()
     assert (output_dir / "factor_map.md").is_file()
     assert obsidian_output.is_file()
-    assert "QuantGPT 因子地图" in obsidian_output.read_text(encoding="utf-8")
+    assert "worldquant-harness 因子地图" in obsidian_output.read_text(encoding="utf-8")
 
 
 def test_build_similarity_edges_marks_same_family_without_high_score():

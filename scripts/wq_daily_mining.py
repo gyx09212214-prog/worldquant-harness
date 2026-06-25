@@ -21,11 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.expression_parser import normalize_expression
-from quantgpt.wq_auto_mining import load_dotenv, write_json
-from quantgpt.wq_brain_client import get_client, is_configured
-from quantgpt.wq_brain_service import run_list_alphas
-from quantgpt.wq_forum_submission_optimizer import annotate_candidate_with_policy, load_submission_policy
+from worldquant_harness.expression_parser import normalize_expression
+from worldquant_harness.wq_auto_mining import load_dotenv, write_json
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_brain_service import run_list_alphas
+from worldquant_harness.wq_forum_submission_optimizer import annotate_candidate_with_policy, load_submission_policy
 from scripts import check_wq_submissions as submission_checks
 from scripts import wq_find_only
 
@@ -257,7 +257,7 @@ def collect_pending_rows(config: DailyMiningConfig, output_path: Path) -> list[d
             rows.extend(submission_checks.load_submission_rows([path], include_all=True, only_pending=True))
     if config.use_ledger:
         try:
-            from quantgpt.wq_alpha_ledger import query_alpha_experiment_rows_sync
+            from worldquant_harness.wq_alpha_ledger import query_alpha_experiment_rows_sync
 
             rows.extend(query_alpha_experiment_rows_sync(
                 statuses=["correlation_pending"],
@@ -558,7 +558,7 @@ def _record_platform_alphas_in_ledger(records: list[dict], output_path: Path, co
     if not ledger_records:
         return {"ok": True, "recorded": 0}
     try:
-        from quantgpt.wq_alpha_ledger import record_api_check_records_sync
+        from worldquant_harness.wq_alpha_ledger import record_api_check_records_sync
 
         return record_api_check_records_sync(
             ledger_records,

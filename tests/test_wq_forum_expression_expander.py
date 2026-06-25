@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from quantgpt.wq_forum_expression_expander import (
+from worldquant_harness.wq_forum_expression_expander import (
     WQForumExpressionExpanderConfig,
     build_forum_expression_expansion,
 )

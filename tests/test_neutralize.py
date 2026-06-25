@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from quantgpt.neutralize import cap_neutralize, industry_neutralize, neutralize_factor
+from worldquant_harness.neutralize import cap_neutralize, industry_neutralize, neutralize_factor
 
 
 def _make_factor_df(n_dates=3, n_stocks=6):

@@ -56,12 +56,12 @@ function McpGuideModal({ onClose }: { onClose: () => void }) {
 
   const mcpConfig = `{
   "mcpServers": {
-    "quantgpt": {
+    "worldquant_harness": {
       "type": "stdio",
       "command": "python3",
-      "args": ["-m", "quantgpt"],
+      "args": ["-m", "worldquant_harness"],
       "env": {
-        "PYTHONPATH": "/path/to/QuantGPT"
+        "PYTHONPATH": "/path/to/worldquant-harness"
       }
     }
   }
@@ -100,7 +100,7 @@ agent.register_tool(backtest_tool)`;
             </div>
             <div>
               <h2 className={`text-base font-semibold ${isDark ? "text-gray-100" : "text-gray-900"}`}>MCP 集成指南</h2>
-              <p className="text-xs text-gray-400">通过 MCP 协议接入 QuantGPT 回测能力</p>
+              <p className="text-xs text-gray-400">通过 MCP 协议接入 worldquant-harness 回测能力</p>
             </div>
           </div>
           <button
@@ -149,7 +149,7 @@ agent.register_tool(backtest_tool)`;
               <div className={`${isDark ? "bg-amber-500/10" : "bg-blue-50"} rounded-lg p-3.5`}>
                 <p className={`text-sm ${isDark ? "text-amber-300" : "text-blue-800"}`}>
                   <span className="font-medium">什么是 MCP？</span>{" "}
-                  MCP (Model Context Protocol) 让 Claude 直接调用 QuantGPT 的回测工具。
+                  MCP (Model Context Protocol) 让 Claude 直接调用 worldquant-harness 的回测工具。
                   配置后，Claude 可以直接调用回测、评分、诊断等研究工具。
                 </p>
               </div>
@@ -161,8 +161,8 @@ agent.register_tool(backtest_tool)`;
                   <h3 className={`text-sm font-medium ${isDark ? "text-gray-100" : "text-gray-900"}`}>克隆项目并安装</h3>
                 </div>
                 <div className="relative bg-gray-900 rounded-lg p-3 font-mono text-xs text-gray-100 leading-relaxed">
-                  <CopyButton text={"git clone https://github.com/Miasyster/QuantGPT.git\ncd QuantGPT\npip install -e ."} />
-                  <pre className="whitespace-pre-wrap"><span className="text-green-400">$</span> git clone https://github.com/Miasyster/QuantGPT.git{"\n"}<span className="text-green-400">$</span> cd QuantGPT{"\n"}<span className="text-green-400">$</span> pip install -e .</pre>
+                  <CopyButton text={"git clone https://github.com/gyx09212214-prog/worldquant-harness.git\ncd worldquant-harness\npip install -e ."} />
+                  <pre className="whitespace-pre-wrap"><span className="text-green-400">$</span> git clone https://github.com/gyx09212214-prog/worldquant-harness.git{"\n"}<span className="text-green-400">$</span> cd worldquant-harness{"\n"}<span className="text-green-400">$</span> pip install -e .</pre>
                 </div>
               </div>
 
@@ -192,7 +192,7 @@ agent.register_tool(backtest_tool)`;
                   <CopyButton text="claude mcp list" />
                   <div>
                     <span className="text-green-400">$</span> claude mcp list<br/>
-                    <span className="text-gray-400"># quantgpt: Connected</span>
+                    <span className="text-gray-400"># worldquant-harness: Connected</span>
                   </div>
                 </div>
                 <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"} mt-2`}>
@@ -206,8 +206,8 @@ agent.register_tool(backtest_tool)`;
               <div className={`${isDark ? "bg-amber-500/10" : "bg-blue-50"} rounded-lg p-3.5`}>
                 <p className={`text-sm ${isDark ? "text-amber-300" : "text-blue-800"}`}>
                   <span className="font-medium">架构说明</span>{" "}
-                  OpenClaw 是 Agent 调度框架，通过 MCP 协议动态调用 QuantGPT 的回测能力。
-                  QuantGPT 作为 MCP Server 暴露标准化工具接口。
+                  OpenClaw 是 Agent 调度框架，通过 MCP 协议动态调用 worldquant-harness 的回测能力。
+                  worldquant-harness 作为 MCP Server 暴露标准化工具接口。
                 </p>
               </div>
 
@@ -217,7 +217,7 @@ agent.register_tool(backtest_tool)`;
       ↓
 [MCP Client]
       ↓  Streamable HTTP
-[QuantGPT MCP Server (localhost:8002)]
+[worldquant-harness MCP Server (localhost:8002)]
       ↓
 [回测 / 评分 / 诊断 / 验证]`}</pre>
               </div>
@@ -296,7 +296,7 @@ agent.register_tool(backtest_tool)`;
         {/* Footer */}
         <div className={`px-5 py-3 border-t ${isDark ? "border-gray-700" : "border-gray-100"} flex items-center justify-between`}>
           <a
-            href="https://github.com/Miasyster/QuantGPT"
+            href="https://github.com/gyx09212214-prog/worldquant-harness"
             target="_blank"
             rel="noopener noreferrer"
             className={`flex items-center gap-1.5 text-sm ${isDark ? "text-gray-400 hover:text-gray-300" : "text-gray-500 hover:text-gray-700"} transition-colors`}
@@ -359,7 +359,7 @@ export default function Header() {
             <BarChart3 className={`h-6 w-6 ${isDark ? "text-amber-400" : "text-blue-600"}`} />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className={`text-lg font-semibold ${isDark ? "text-gray-100" : "text-gray-900"}`}>QuantGPT</h1>
+                <h1 className={`text-lg font-semibold ${isDark ? "text-gray-100" : "text-gray-900"}`}>worldquant-harness</h1>
                 <button
                   onClick={() => setShowChangelog(true)}
                   className={`text-xs px-1.5 py-0.5 rounded ${isDark ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-blue-50 text-blue-600 hover:bg-blue-100"} transition-colors font-mono`}

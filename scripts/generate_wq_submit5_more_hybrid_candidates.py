@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_auto_mining import validate_wq_expression
+from worldquant_harness.wq_auto_mining import validate_wq_expression
 
 
 DEFAULT_OUTPUT = ROOT / "reports" / "wq_submit5_more_20260611" / "hybrid_forum_missingness_candidates.jsonl"

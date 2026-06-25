@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_research_sandbox import (
+from worldquant_harness.wq_research_sandbox import (
     ResearchSandboxMineConfig,
     gate_research_experiment,
     mine_research_experiment,

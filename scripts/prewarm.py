@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-warm all data caches for QuantGPT.
+Pre-warm all data caches for worldquant-harness.
 
 Usage:
     python scripts/prewarm.py [--universe all|hs300|csi500|csi1000|csi2000]
@@ -36,7 +36,7 @@ BENCHMARKS = ["hs300", "zz500", "csi1000"]
 
 def prewarm_universe_lists():
     """Cache universe constituent lists for current month."""
-    from quantgpt.market_data import get_universe
+    from worldquant_harness.market_data import get_universe
     for name in UNIVERSES:
         try:
             codes = get_universe(name)
@@ -47,7 +47,7 @@ def prewarm_universe_lists():
 
 def prewarm_benchmarks():
     """Cache benchmark return series."""
-    from quantgpt.market_data import fetch_benchmark_returns
+    from worldquant_harness.market_data import fetch_benchmark_returns
     for bm in BENCHMARKS:
         try:
             ret = fetch_benchmark_returns(bm, START_DATE, END_DATE)
@@ -61,7 +61,7 @@ def prewarm_benchmarks():
 
 def prewarm_market_data(stock_codes: list, batch_size: int = 200):
     """Cache OHLCV data for all stocks in batches."""
-    from quantgpt.market_data import MarketDataFetcher
+    from worldquant_harness.market_data import MarketDataFetcher
     fetcher = MarketDataFetcher()
     total = len(stock_codes)
     logger.info(f"Pre-warming market data for {total} stocks ({START_DATE} ~ {END_DATE})")
@@ -78,7 +78,7 @@ def prewarm_market_data(stock_codes: list, batch_size: int = 200):
 
 def prewarm_fundamentals(stock_codes: list, batch_size: int = 50):
     """Cache fundamental data for all stocks."""
-    from quantgpt.fundamental_data import FundamentalDataFetcher, ALL_FUNDAMENTAL_NAMES
+    from worldquant_harness.fundamental_data import FundamentalDataFetcher, ALL_FUNDAMENTAL_NAMES
     fetcher = FundamentalDataFetcher()
     total = len(stock_codes)
     # Use all fundamental vars to ensure all columns are cached
@@ -97,7 +97,7 @@ def prewarm_fundamentals(stock_codes: list, batch_size: int = 50):
 
 def prewarm_dividends(stock_codes: list, batch_size: int = 50):
     """Cache dividend data for all stocks."""
-    from quantgpt.fundamental_data import FundamentalDataFetcher
+    from worldquant_harness.fundamental_data import FundamentalDataFetcher
     fetcher = FundamentalDataFetcher()
     total = len(stock_codes)
     logger.info(f"Pre-warming dividends for {total} stocks")
@@ -114,7 +114,7 @@ def prewarm_dividends(stock_codes: list, batch_size: int = 50):
 
 def main():
     global START_DATE, END_DATE
-    parser = argparse.ArgumentParser(description="Pre-warm QuantGPT data caches")
+    parser = argparse.ArgumentParser(description="Pre-warm worldquant-harness data caches")
     parser.add_argument("--universe", default="all", help="Universe to warm: all|hs300|csi500|csi1000|csi2000")
     parser.add_argument("--start", default=START_DATE)
     parser.add_argument("--end", default=END_DATE)
@@ -136,7 +136,7 @@ def main():
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip())
 
-    logger.info(f"=== QuantGPT Data Pre-warm ===")
+    logger.info(f"=== worldquant-harness Data Pre-warm ===")
     logger.info(f"Date range: {START_DATE} ~ {END_DATE}")
 
     # Step 1: Cache universe lists
@@ -145,7 +145,7 @@ def main():
 
     # Step 2: Collect all stock codes
     logger.info("--- Step 2: Collecting all stock codes ---")
-    from quantgpt.market_data import get_universe
+    from worldquant_harness.market_data import get_universe
     all_codes = set()
     universes_to_warm = UNIVERSES if args.universe == "all" else [args.universe]
     for name in universes_to_warm:
@@ -187,8 +187,8 @@ def main():
     if not args.skip_factors:
         logger.info("--- Step 7: rqdatac daily factors ---")
         try:
-            from quantgpt.fundamental_data import prewarm_factors_rq
-            from quantgpt.market_data import enable_rqdatac
+            from worldquant_harness.fundamental_data import prewarm_factors_rq
+            from worldquant_harness.market_data import enable_rqdatac
             with enable_rqdatac():
                 prewarm_factors_rq(stock_codes, START_DATE, END_DATE)
         except Exception as e:

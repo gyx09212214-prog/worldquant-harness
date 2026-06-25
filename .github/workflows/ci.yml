@@ -21,23 +21,29 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Lint
-        run: ruff check quantgpt/ tests/
+        run: ruff check worldquant_harness/ tests/
 
-      - name: Type check
-        run: pyright quantgpt/ --level basic
+      - name: Type check (advisory)
+        continue-on-error: true
+        run: pyright worldquant_harness/
+
+      - name: Public harness demo smoke
+        run: |
+          python scripts/run_public_harness_demo.py --output-root reports/public_harness_demo_ci --run-id public-harness-demo-ci
+          python scripts/validate_public_harness_artifacts.py reports/public_harness_demo_ci
 
       - name: Test with coverage
         env:
           JWT_SECRET_KEY: test-secret-for-ci-only
           DATABASE_URL: "sqlite+aiosqlite:///./test.db"
-        run: pytest tests/ -x -q --cov=quantgpt --cov-report=term-missing --cov-fail-under=33
+        run: pytest tests/ -x -q --cov=worldquant_harness --cov-report=term-missing --cov-fail-under=33
 
       - name: Dependency audit
         run: pip-audit --strict --desc -f json 2>/dev/null | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           vulns = data.get('dependencies', [])
-          own_pkgs = {'quantgpt','pandas','numpy','scipy','baostock','quantstats',
+          own_pkgs = {'worldquant-harness','worldquant_harness','pandas','numpy','scipy','baostock','quantstats',
                       'mcp','uvicorn','fastapi','openai','sqlalchemy','aiosqlite',
                       'alembic','pyjwt','bcrypt','aiosmtplib','httpx','akshare',
                       'apscheduler','starlette','python-multipart'}

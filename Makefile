@@ -14,20 +14,20 @@ setup:
 	@echo "Setup complete! Run: make run"
 
 run:
-	$(BIN)/python -m quantgpt --transport http
+	$(BIN)/python -m worldquant_harness --transport http
 
 dev:
-	$(BIN)/python -m quantgpt --transport http --port 8003
+	$(BIN)/python -m worldquant_harness --transport http --port 8003
 
 test:
 	$(BIN)/pytest tests/ -x -q
 
 lint:
-	$(BIN)/ruff check quantgpt/ tests/
-	$(BIN)/pyright quantgpt/
+	$(BIN)/ruff check worldquant_harness/ tests/
+	$(BIN)/pyright worldquant_harness/
 
 frontend:
 	cd frontend && npm ci && npm run build
 
 clean:
-	rm -rf $(VENV) *.egg-info __pycache__ quantgpt.db
+	rm -rf $(VENV) *.egg-info __pycache__ worldquant_harness.db

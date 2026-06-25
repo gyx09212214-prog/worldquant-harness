@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_active_weak_review import WQActiveWeakReviewConfig, run_active_weak_review
+from worldquant_harness.wq_active_weak_review import WQActiveWeakReviewConfig, run_active_weak_review
 
 
 def main(argv: list[str] | None = None) -> int:

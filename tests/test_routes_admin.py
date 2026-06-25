@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from quantgpt.auth import create_admin_token
+from worldquant_harness.auth import create_admin_token
 
 pytestmark = pytest.mark.asyncio
 
@@ -25,7 +25,7 @@ class TestAdminLogin:
         assert resp.status_code == 401
 
     async def test_empty_admin_password_returns_503(self, client):
-        with patch.dict(os.environ, {"QUANTGPT_ADMIN_PASSWORD": ""}):
+        with patch.dict(os.environ, {"WORLDQUANT_HARNESS_ADMIN_PASSWORD": ""}):
             resp = await client.post("/api/v1/admin/login", json={
                 "password": "anything",
             })

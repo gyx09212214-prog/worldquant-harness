@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-8">
           <Shield className="h-7 w-7 text-blue-600" />
-          <span className="text-xl font-semibold text-gray-900">QuantGPT Admin</span>
+          <span className="text-xl font-semibold text-gray-900">worldquant-harness Admin</span>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

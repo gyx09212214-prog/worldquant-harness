@@ -1,7 +1,7 @@
 """Tests for iteration module — compute_factor_score."""
 
 
-from quantgpt.iteration import compute_factor_score, is_duplicate_expression
+from worldquant_harness.iteration import compute_factor_score, is_duplicate_expression
 
 
 class TestComputeFactorScore:

@@ -14,8 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_auto_mining import load_dotenv
-from quantgpt.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_auto_mining import load_dotenv
+from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_post_submit_review import WQPostSubmitReviewConfig, build_post_submit_review
 
 
 BLOCKING_PLATFORM_CHECKS = {
@@ -31,6 +32,8 @@ BLOCKING_PLATFORM_CHECKS = {
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    if args.check_only:
+        args.check_before_submit = True
     load_dotenv(ROOT)
     output_dir = _resolve(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -97,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps({"alpha_id": alpha_id, "status": row["final_status"], "active_count": active_count}, ensure_ascii=False), flush=True)
                 continue
 
-            if args.check_before_submit and not precheck:
+            if args.check_before_submit and should_run_live_check(precheck):
                 print(json.dumps({"event": "live_check_start", "alpha_id": alpha_id}, ensure_ascii=False), flush=True)
                 check = client.check_alpha_submission(alpha_id, max_polls=args.check_polls, interval=args.check_interval)
                 row["live_precheck"] = check
@@ -143,6 +146,19 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps({"alpha_id": alpha_id, "status": row["final_status"], "active_count": active_count}, ensure_ascii=False), flush=True)
                     continue
 
+            if args.check_only:
+                row.update({
+                    "ok": True,
+                    "final_status": "PRECHECK_PASS",
+                    "failure_kind": None,
+                    "detail": "precheck passed; check-only mode skipped submit",
+                })
+                append_jsonl(results_path, row)
+                existing.append(row)
+                write_summary(summary_path, existing, target=args.target, attempts=attempts, candidate_count=len(candidates))
+                print(json.dumps({"alpha_id": alpha_id, "status": row["final_status"], "active_count": active_count}, ensure_ascii=False), flush=True)
+                continue
+
             print(json.dumps({"event": "submit_start", "alpha_id": alpha_id}, ensure_ascii=False), flush=True)
             result = client.submit_alpha(alpha_id)
             final_status = final_status_from_submit(result)
@@ -181,8 +197,16 @@ def main(argv: list[str] | None = None) -> int:
 
     final_rows = read_jsonl(results_path)
     summary = write_summary(summary_path, final_rows, target=args.target, attempts=attempts, candidate_count=len(candidates))
+    if args.check_only:
+        summary["ok"] = True
+        summary["check_only"] = True
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    elif not args.no_post_submit_review:
+        review = run_post_submit_review(args, output_dir)
+        summary["post_submit_review"] = review
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
-    return 0 if summary.get("active", 0) >= args.target else 1
+    return 0 if args.check_only or summary.get("active", 0) >= args.target else 1
 
 
 def load_candidates(candidate_file: Path, check_files: list[Path]) -> list[dict[str, Any]]:
@@ -243,6 +267,15 @@ def is_precheck_blocked(precheck: dict[str, Any]) -> bool:
         or failure in {"self_correlation", "prod_correlation", "platform_check_fail"}
         or bool(platform_failed_checks(precheck))
     )
+
+
+def should_run_live_check(precheck: dict[str, Any]) -> bool:
+    if not precheck:
+        return True
+    if is_precheck_blocked(precheck):
+        return False
+    status = str(precheck.get("api_check_status") or "").lower()
+    return status not in {"api_check_readable", "platform_active_check_readable"}
 
 
 def is_live_check_blocked(check: dict[str, Any]) -> bool:
@@ -315,6 +348,7 @@ def write_summary(path: Path, rows: list[dict[str, Any]], *, target: int, attemp
         "sc_fail": sum(1 for row in rows if row.get("final_status") == "SC_FAIL"),
         "prod_corr_fail": sum(1 for row in rows if row.get("final_status") == "PROD_CORR_FAIL"),
         "precheck_blocked": sum(1 for row in rows if row.get("final_status") == "PRECHECK_BLOCKED"),
+        "precheck_pass": sum(1 for row in rows if row.get("final_status") == "PRECHECK_PASS"),
         "corr_pending": sum(1 for row in rows if row.get("final_status") in {"CORR_PENDING", "PRECHECK_PENDING"}),
         "platform_check_fail": sum(1 for row in rows if row.get("final_status") == "PLATFORM_CHECK_FAIL"),
         "already_submitted": sum(1 for row in rows if row.get("final_status") == "ALREADY_SUBMITTED"),
@@ -324,6 +358,19 @@ def write_summary(path: Path, rows: list[dict[str, Any]], *, target: int, attemp
     }
     path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return summary
+
+
+def run_post_submit_review(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
+    try:
+        return build_post_submit_review(WQPostSubmitReviewConfig(
+            run_dirs=(output_dir,),
+            output_dir=output_dir / "post_submit_review",
+            baseline_roots=tuple(_resolve(path) for path in args.post_submit_baseline_roots),
+            profile_dir=_resolve(args.post_submit_profile_dir) if args.post_submit_profile_dir else None,
+            window_days=max(1, args.post_submit_window_days),
+        ))
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "output_dir": str(output_dir / "post_submit_review")}
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -377,6 +424,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--check-polls", type=int, default=3)
     parser.add_argument("--check-interval", type=int, default=10)
     parser.add_argument("--allow-pending", action="store_true")
+    parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--no-post-submit-review", action="store_true")
+    parser.add_argument("--post-submit-baseline-roots", nargs="*", default=[])
+    parser.add_argument("--post-submit-profile-dir", default="")
+    parser.add_argument("--post-submit-window-days", type=int, default=14)
     return parser.parse_args(argv)
 
 

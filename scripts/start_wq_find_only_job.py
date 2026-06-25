@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = Path(r"C:\Users\guoyx\AppData\Local\Programs\Python\Python313\python.exe")
+PYTHON = Path(sys.executable)
 
 
 def main() -> int:

@@ -18,7 +18,7 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[postgresql]" && \
     rm -rf /root/.cache/pip
 
-COPY quantgpt/ ./quantgpt/
+COPY worldquant_harness/ ./worldquant_harness/
 COPY scripts/ ./scripts/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
@@ -27,7 +27,7 @@ RUN mkdir -p data reports logs
 EXPOSE 8003
 
 ENV AUTH_DISABLED=true
-ENV QUANTGPT_TASK_BACKEND=process
-ENV QUANTGPT_WORKER_PROCESSES=2
+ENV WORLDQUANT_HARNESS_TASK_BACKEND=process
+ENV WORLDQUANT_HARNESS_WORKER_PROCESSES=2
 
-CMD ["python", "-m", "quantgpt", "--transport", "http"]
+CMD ["python", "-m", "worldquant_harness", "--transport", "http"]

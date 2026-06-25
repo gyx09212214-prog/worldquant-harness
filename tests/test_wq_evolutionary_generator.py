@@ -1,5 +1,5 @@
-from quantgpt.wq_auto_mining import validate_wq_expression
-from quantgpt.wq_evolutionary_generator import (
+from worldquant_harness.wq_auto_mining import validate_wq_expression
+from worldquant_harness.wq_evolutionary_generator import (
     build_seed_pool,
     classify_domain,
     generate_evolutionary_candidates,

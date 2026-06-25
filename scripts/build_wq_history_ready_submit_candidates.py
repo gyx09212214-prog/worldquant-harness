@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.expression_parser import extract_components, normalize_expression
+from worldquant_harness.expression_parser import extract_components, normalize_expression
 
 
 DEFAULT_REPORT_ROOT = ROOT / "reports"

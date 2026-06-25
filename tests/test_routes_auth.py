@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from quantgpt.auth import create_access_token, create_refresh_token
-from quantgpt.models import User, VerificationCode
+from worldquant_harness.auth import create_access_token, create_refresh_token
+from worldquant_harness.models import User, VerificationCode
 
 pytestmark = pytest.mark.asyncio
 
@@ -27,16 +27,16 @@ class TestSendCode:
         resp = await client.post("/api/v1/auth/send-code", json={"email": "not-an-email"})
         assert resp.status_code == 422
 
-    @patch("quantgpt.routes.auth.send_verification_email", new_callable=AsyncMock)
+    @patch("worldquant_harness.routes.auth.send_verification_email", new_callable=AsyncMock)
     async def test_valid_email_sends_code(self, mock_send, client, db_session):
         resp = await client.post("/api/v1/auth/send-code", json={"email": "user@test.com"})
         assert resp.status_code == 200
         assert resp.json()["expires_in"] == 300
         mock_send.assert_awaited_once()
 
-    @patch("quantgpt.routes.auth.send_verification_email", new_callable=AsyncMock)
+    @patch("worldquant_harness.routes.auth.send_verification_email", new_callable=AsyncMock)
     async def test_rate_limit_blocks_rapid_resend(self, mock_send, client):
-        from quantgpt.auth import _email_rate
+        from worldquant_harness.auth import _email_rate
         _email_rate.clear()
         resp1 = await client.post("/api/v1/auth/send-code", json={"email": "ratelimit@test.com"})
         assert resp1.status_code == 200

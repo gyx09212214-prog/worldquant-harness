@@ -32,7 +32,7 @@ function drawShareCard(canvas: HTMLCanvasElement, result: BacktestResult) {
   // Brand
   ctx.fillStyle = "#94a3b8";
   ctx.font = "bold 13px -apple-system, system-ui, sans-serif";
-  ctx.fillText("QuantGPT", 24, 32);
+  ctx.fillText("worldquant-harness", 24, 32);
   ctx.fillStyle = "#475569";
   ctx.font = "11px -apple-system, system-ui, sans-serif";
   ctx.fillText("AI 量化策略回测", 100, 32);
@@ -196,7 +196,7 @@ function drawShareCard(canvas: HTMLCanvasElement, result: BacktestResult) {
   ctx.fillText(footer, 24, H - 16);
   ctx.fillStyle = "#64748b";
   ctx.textAlign = "right";
-  ctx.fillText("QuantGPT", W - 24, H - 16);
+  ctx.fillText("worldquant-harness", W - 24, H - 16);
   ctx.textAlign = "left";
 }
 
@@ -215,7 +215,7 @@ export default function ShareCardButton({ result }: Props) {
   const download = useCallback(() => {
     if (!canvasRef.current) return;
     const link = document.createElement("a");
-    link.download = `quantgpt-${result.params.expression.slice(0, 20).replace(/[^a-zA-Z0-9]/g, "_")}.png`;
+    link.download = `worldquant_harness-${result.params.expression.slice(0, 20).replace(/[^a-zA-Z0-9]/g, "_")}.png`;
     link.href = canvasRef.current.toDataURL("image/png");
     link.click();
   }, [result]);

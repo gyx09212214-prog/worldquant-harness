@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from quantgpt.community_triage import (
+from worldquant_harness.community_triage import (
     CommunityTriageConfig,
     build_community_items,
     triage_community,

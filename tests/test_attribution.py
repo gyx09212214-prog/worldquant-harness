@@ -4,7 +4,7 @@
 import numpy as np
 import pandas as pd
 
-from quantgpt.attribution import _compute_marginal_contributions, _rank_ic
+from worldquant_harness.attribution import _compute_marginal_contributions, _rank_ic
 
 
 def _make_market_df(n_dates=60, n_stocks=20):

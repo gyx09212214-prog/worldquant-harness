@@ -734,7 +734,7 @@ export default function AdminPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-blue-600" />
-          <span className="font-semibold text-gray-900">QuantGPT Admin</span>
+          <span className="font-semibold text-gray-900">worldquant-harness Admin</span>
         </div>
         <button
           onClick={adminLogout}

@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.wq_alpha_ledger import record_api_check_record_sync, record_find_only_entry_sync
-from quantgpt.wq_auto_mining import load_dotenv
+from worldquant_harness.wq_alpha_ledger import record_api_check_record_sync, record_find_only_entry_sync
+from worldquant_harness.wq_auto_mining import load_dotenv
 
 
 def main(argv: list[str] | None = None) -> int:

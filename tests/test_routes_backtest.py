@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from quantgpt.task_store import tasks, tasks_lock
+from worldquant_harness.task_store import tasks, tasks_lock
 
 pytestmark = pytest.mark.asyncio
 
@@ -54,7 +54,7 @@ class TestListTasks:
         assert data["tasks"] == []
 
     async def test_lists_user_tasks(self, client, test_user, auth_headers, db_session):
-        from quantgpt.models import Task as TaskModel
+        from worldquant_harness.models import Task as TaskModel
         t = TaskModel(
             id="test-task-1",
             user_id=test_user.id,
@@ -74,7 +74,7 @@ class TestListTasks:
 
 class TestGetTask:
     async def test_get_existing_task(self, client, test_user, auth_headers, db_session):
-        from quantgpt.models import Task as TaskModel
+        from worldquant_harness.models import Task as TaskModel
         t = TaskModel(
             id="detail-task-1",
             user_id=test_user.id,

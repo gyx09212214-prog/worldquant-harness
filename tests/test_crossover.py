@@ -1,6 +1,6 @@
 """Tests for crossover_engine.py."""
 
-from quantgpt.crossover_engine import build_crossover_prompt, extract_top_segments
+from worldquant_harness.crossover_engine import build_crossover_prompt, extract_top_segments
 
 
 class TestExtractTopSegments:

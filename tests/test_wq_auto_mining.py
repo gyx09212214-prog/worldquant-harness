@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from quantgpt.wq_auto_mining import (
+from worldquant_harness.wq_auto_mining import (
     WQAutoMiner,
     WQAutoMiningConfig,
     build_wq_mutation_prompt,

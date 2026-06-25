@@ -17,20 +17,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quantgpt.alpha_tracker import compute_similarity
-from quantgpt.expression_parser import extract_components, normalize_expression
-from quantgpt.wq_alpha_detail import render_probe_markdown, summarize_alpha_probe, write_probe_outputs
-from quantgpt.wq_auto_mining import load_dotenv
-from quantgpt.wq_brain_client import READ_ONLY_ALPHA_DETAIL_PATHS, get_client, is_configured
-from quantgpt.wq_evolutionary_generator import classify_domain, family_hash
-from quantgpt.wq_factor_map import (
+from worldquant_harness.alpha_tracker import compute_similarity
+from worldquant_harness.expression_parser import extract_components, normalize_expression
+from worldquant_harness.wq_alpha_detail import render_probe_markdown, summarize_alpha_probe, write_probe_outputs
+from worldquant_harness.wq_auto_mining import load_dotenv
+from worldquant_harness.wq_brain_client import READ_ONLY_ALPHA_DETAIL_PATHS, get_client, is_configured
+from worldquant_harness.wq_evolutionary_generator import classify_domain, family_hash
+from worldquant_harness.wq_factor_map import (
     build_domain_summary,
     build_field_summary,
     build_similarity_edges,
     merge_factor_nodes,
 )
-from quantgpt.wq_pnl_analysis import analyze_probe_directory, write_pnl_analysis_artifacts
-from quantgpt.wq_review import parse_review_checks
+from worldquant_harness.wq_pnl_analysis import analyze_probe_directory, write_pnl_analysis_artifacts
+from worldquant_harness.wq_review import parse_review_checks
 
 
 def main(argv: list[str] | None = None) -> int:

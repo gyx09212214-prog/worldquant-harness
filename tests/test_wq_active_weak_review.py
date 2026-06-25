@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from quantgpt.wq_active_weak_review import WQActiveWeakReviewConfig, run_active_weak_review
+from worldquant_harness.wq_active_weak_review import WQActiveWeakReviewConfig, run_active_weak_review
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

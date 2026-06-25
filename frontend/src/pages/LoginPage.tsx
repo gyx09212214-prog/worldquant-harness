@@ -148,7 +148,7 @@ export default function LoginPage() {
         <div className="hidden lg:block flex-1">
           <div className="flex items-center gap-2 mb-8">
             <BarChart3 className="h-8 w-8 text-blue-600" />
-            <span className="text-2xl font-bold text-gray-900">QuantGPT</span>
+            <span className="text-2xl font-bold text-gray-900">worldquant-harness</span>
           </div>
 
           <h2 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">
@@ -196,7 +196,7 @@ export default function LoginPage() {
           {/* Logo (mobile only) */}
           <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
             <BarChart3 className="h-7 w-7 text-blue-600" />
-            <span className="text-xl font-semibold text-gray-900">QuantGPT</span>
+            <span className="text-xl font-semibold text-gray-900">worldquant-harness</span>
           </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

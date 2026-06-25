@@ -1,4 +1,4 @@
-"""Tests for quantgpt/auth.py — JWT, password hashing, rate limiting."""
+"""Tests for worldquant_harness/auth.py — JWT, password hashing, rate limiting."""
 
 import os
 import time
@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-ci-only-do-not-use-in-production")
 
-from quantgpt.auth import (
+from worldquant_harness.auth import (
     _email_rate,
     _extract_token,
     check_email_rate_limit,
