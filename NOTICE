@@ -1,8 +1,8 @@
-QuantGPT — AI-Powered Quantitative Factor Research Platform
+worldquant-harness — AI-Powered Quantitative Factor Research Platform
 Copyright (c) 2026 Miasyster
 Licensed under the MIT License (see LICENSE file)
 
-Repository: https://github.com/Miasyster/QuantGPT
+Repository: https://github.com/gyx09212214-prog/worldquant-harness
 Initial commit: 2026-03-20 (git SHA: 3538047)
 
 This project is the original source of the following core modules:
@@ -20,3 +20,14 @@ This project is the original source of the following core modules:
 
 Any derivative works based on these modules should retain this notice
 and comply with the MIT License terms.
+
+Non-affiliation notice:
+This project is not affiliated with, endorsed by, sponsored by, or officially
+connected to WorldQuant, WorldQuant BRAIN, or any external data/trading
+platform. External service names are used only to describe integration targets.
+
+Research and publication boundary:
+Public examples should use synthetic fixtures or sanitized artifacts. Raw
+platform exports, submit/check ledgers, credentials, cookies, session states,
+and private research records are not part of the MIT-licensed public release
+unless explicitly reviewed and approved for publication.

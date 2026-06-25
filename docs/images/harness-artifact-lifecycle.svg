@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness artifact lifecycle</title>
+<desc id="desc">Public-safe diagram of the harness artifact lifecycle.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5c6670"/>
+  </marker>
+  <style>
+    .title{font:700 28px Arial,sans-serif;fill:#17202a}
+    .subtitle{font:400 15px Arial,sans-serif;fill:#5c6670}
+    .label{font:700 16px Arial,sans-serif;fill:#17202a}
+    .body{font:400 13px Arial,sans-serif;fill:#5c6670}
+    .tiny{font:400 12px Arial,sans-serif;fill:#5c6670}
+    .metric{font:700 22px Arial,sans-serif;fill:#17202a}
+  </style>
+</defs>
+<rect width="1120" height="560" fill="#ffffff"/>
+<text x="48" y="54" class="title">Artifact lifecycle: every agent decision leaves a file</text>
+<text x="48" y="82" class="subtitle">The public harness path is reproducible because candidate, gate, memory, and profile artifacts are written before any submit-capable command.</text>
+
+<rect x="58" y="132" width="178" height="96" rx="8" fill="#eaf1ff" stroke="#2f6fed" stroke-width="2"/>
+<text x="76" y="162" class="label">candidate_specs</text>
+<text x="76" y="188" class="body">source, intent, fields</text>
+<text x="76" y="206" class="body">stable candidate_uid</text>
+
+<line x1="240" y1="180" x2="286" y2="180" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="292" y="132" width="178" height="96" rx="8" fill="#eaf1ff" stroke="#2f6fed" stroke-width="2"/>
+<text x="310" y="162" class="label">simulation_results</text>
+<text x="310" y="188" class="body">metrics, settings</text>
+<text x="310" y="206" class="body">platform-safe adapter</text>
+
+<line x1="474" y1="180" x2="520" y2="180" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="526" y="132" width="178" height="96" rx="8" fill="#fff4df" stroke="#c47f17" stroke-width="2"/>
+<text x="544" y="162" class="label">review_queue</text>
+<text x="544" y="188" class="body">gate inputs</text>
+<text x="544" y="206" class="body">quality and blockers</text>
+
+<line x1="615" y1="232" x2="615" y2="278" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="392" y="292" width="178" height="96" rx="8" fill="#e8f6ee" stroke="#1f9d55" stroke-width="2"/>
+<text x="410" y="322" class="label">presubmit_ready</text>
+<text x="410" y="348" class="body">accepted candidates</text>
+<text x="410" y="366" class="body">ready for review</text>
+
+<rect x="660" y="292" width="178" height="96" rx="8" fill="#fdecec" stroke="#d64545" stroke-width="2"/>
+<text x="678" y="322" class="label">presubmit_rejected</text>
+<text x="678" y="348" class="body">reason codes</text>
+<text x="678" y="366" class="body">blocker evidence</text>
+
+<line x1="615" y1="278" x2="481" y2="292" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+<line x1="615" y1="278" x2="749" y2="292" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="120" y="428" width="238" height="80" rx="8" fill="#f7f9fb" stroke="#d8dde3"/>
+<text x="138" y="458" class="label">alpha_lifecycle_events</text>
+<text x="138" y="484" class="body">append-only trace for audit</text>
+
+<rect x="442" y="428" width="238" height="80" rx="8" fill="#f7f9fb" stroke="#d8dde3"/>
+<text x="460" y="458" class="label">memory_delta</text>
+<text x="460" y="484" class="body">failures become constraints</text>
+
+<rect x="764" y="428" width="238" height="80" rx="8" fill="#f7f9fb" stroke="#d8dde3"/>
+<text x="782" y="458" class="label">profile_patch</text>
+<text x="782" y="484" class="body">next search policy candidate</text>
+
+<line x1="481" y1="388" x2="250" y2="428" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+<line x1="749" y1="388" x2="562" y2="428" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+<line x1="749" y1="388" x2="884" y2="428" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="784" y="132" width="278" height="96" rx="8" fill="#ffffff" stroke="#d8dde3"/>
+<text x="806" y="162" class="label">human review boundary</text>
+<text x="806" y="188" class="body">ready means reviewable</text>
+<text x="806" y="206" class="body">it does not imply auto-submit</text>
+<line x1="704" y1="180" x2="778" y2="180" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<text x="48" y="536" class="tiny">Public-safe: no credentials, no real alpha IDs, no raw platform ledgers.</text>
+</svg>

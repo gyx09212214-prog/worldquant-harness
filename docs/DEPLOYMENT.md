@@ -1,6 +1,6 @@
 # 部署指南
 
-将 QuantGPT 部署到你自己的服务器上运行。
+将 worldquant-harness 部署到你自己的服务器上运行。
 
 ---
 
@@ -22,8 +22,8 @@
 ### 方式一：Docker 部署（推荐）
 
 ```bash
-git clone https://github.com/Miasyster/QuantGPT.git
-cd QuantGPT
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
 
 # 准备配置
 cp .env.example .env
@@ -41,8 +41,8 @@ docker compose logs -f
 ### 方式二：裸机部署
 
 ```bash
-git clone https://github.com/Miasyster/QuantGPT.git
-cd QuantGPT
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
 
 python3 -m venv venv
 source venv/bin/activate
@@ -65,7 +65,7 @@ bash restart.sh
 
 ```bash
 # 不填则为纯表达式模式（手动输入因子表达式，无 AI 生成）
-DEEPSEEK_API_KEY=sk-你的key
+DEEPSEEK_API_KEY=your-deepseek-api-key
 DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 DEEPSEEK_MODEL=deepseek-chat
 ```
@@ -75,7 +75,7 @@ DEEPSEEK_MODEL=deepseek-chat
 ```bash
 # 默认 SQLite，零配置，留空即可
 # 如需 PostgreSQL：
-# DATABASE_URL=postgresql+asyncpg://quantgpt:password@localhost:5433/quantgpt
+# DATABASE_URL=postgresql+asyncpg://worldquant_harness:password@localhost:5433/worldquant_harness
 ```
 
 ### 3.3 认证
@@ -103,11 +103,11 @@ AUTH_DISABLED=true
 ```json
 {
   "mcpServers": {
-    "quantgpt": {
+    "worldquant-harness": {
       "type": "stdio",
       "command": "python3",
-      "args": ["-m", "quantgpt"],
-      "cwd": "/你的项目路径/QuantGPT"
+      "args": ["-m", "worldquant_harness"],
+      "cwd": "/你的项目路径/worldquant-harness"
     }
   }
 }
@@ -125,7 +125,7 @@ AUTH_DISABLED=true
 首次回测会自动下载行情数据，也可以提前预热：
 
 ```bash
-python -m quantgpt --prefetch hs300 csi500
+python -m worldquant_harness --prefetch hs300 csi500
 ```
 
 ---
@@ -141,7 +141,7 @@ python -m quantgpt --prefetch hs300 csi500
 使用 `host.docker.internal` 替代 `localhost`：
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://quantgpt:password@host.docker.internal:5433/quantgpt
+DATABASE_URL=postgresql+asyncpg://worldquant_harness:password@host.docker.internal:5433/worldquant_harness
 ```
 
 ### 前端页面空白
@@ -151,5 +151,5 @@ DATABASE_URL=postgresql+asyncpg://quantgpt:password@host.docker.internal:5433/qu
 ### MCP 连接失败
 
 1. 确认 `cwd` 是绝对路径
-2. 在项目目录下手动运行 `python3 -m quantgpt` 检查是否有报错
+2. 在项目目录下手动运行 `python3 -m worldquant_harness` 检查是否有报错
 3. 确认 `.env` 文件编码正确且无语法错误

@@ -1,4 +1,4 @@
-# Factor Mining Methodology
+﻿# Factor Mining Methodology
 
 AI-driven autonomous factor research loop: read notes → design factors → backtest → analyze → update knowledge base → iterate.
 
@@ -6,9 +6,9 @@ AI-driven autonomous factor research loop: read notes → design factors → bac
 
 ## Overview
 
-QuantGPT includes a systematic factor mining framework that combines LLM-based factor design with rigorous statistical validation. The process is structured into 6 phases, with built-in research discipline and cross-review mechanisms.
+worldquant-harness includes a systematic factor mining framework that combines LLM-based factor design with rigorous statistical validation. The process is structured into 6 phases, with built-in research discipline and cross-review mechanisms.
 
-The core tooling lives in [`scripts/factor_miner.py`](../scripts/factor_miner.py) — a stateless utility library for batch-submitting factor expressions to the QuantGPT server and parsing results.
+The core tooling lives in [`scripts/factor_miner.py`](../scripts/factor_miner.py) — a stateless utility library for batch-submitting factor expressions to the worldquant-harness server and parsing results.
 
 ---
 

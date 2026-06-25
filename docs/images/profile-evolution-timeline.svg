@@ -1,0 +1,19 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness profile evolution timeline</title>
+<desc id="desc">Static worldquant-harness public harness visual.</desc>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#5c6670"/>
+  </marker>
+  <style>
+    text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #17202a; letter-spacing: 0; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #5c6670; }
+    .label { font-size: 15px; font-weight: 700; }
+    .body { font-size: 13px; fill: #5c6670; }
+    .tiny { font-size: 12px; fill: #5c6670; }
+    .metric { font-size: 20px; font-weight: 700; }
+  </style>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="48" y="54" class="title">Profile evolution timeline</text><text x="48" y="82" class="subtitle">Harness metrics trigger explicit profile candidates before the next experiment is seeded.</text><rect x="78" y="205" width="220" height="112" rx="8" fill="#ffffff" stroke="#2f6fed" stroke-width="2"/><text x="94" y="235" class="label">Harness Eval</text><text x="94" y="261" class="body">score 0.885</text><line x1="302.0" y1="261.0" x2="360.0" y2="261.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><rect x="358" y="205" width="220" height="112" rx="8" fill="#ffffff" stroke="#c47f17" stroke-width="2"/><text x="374" y="235" class="label">Profile Candidate</text><text x="374" y="261" class="body">candidate_a</text><line x1="582.0" y1="261.0" x2="640.0" y2="261.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><rect x="638" y="205" width="220" height="112" rx="8" fill="#ffffff" stroke="#1f9d55" stroke-width="2"/><text x="654" y="235" class="label">Policy Changes</text><text x="654" y="261" class="body">self_correlation_reject_share:</text><text x="654" y="279" class="body">tighten family and</text><text x="654" y="297" class="body">field-signature reuse;</text><line x1="862.0" y1="261.0" x2="920.0" y2="261.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><rect x="918" y="205" width="220" height="112" rx="8" fill="#ffffff" stroke="#2f6fed" stroke-width="2"/><text x="934" y="235" class="label">Child Experiment</text><text x="934" y="261" class="body">exp-20260624-public-harness-demo-g1-e1f6</text><rect x="78" y="388" width="960" height="58" rx="8" fill="#f7f9fb" stroke="#d8dde3"/><text x="94" y="410" class="label">Next profile biases</text><text x="94" y="430" class="tiny">cross_domain_overlay, standalone_low_overlap_research_family, low_overlap_field_family, legal_input_registry_refresh</text><text x="48" y="526" class="tiny">What this proves: agent search preferences are versioned decisions, not implicit prompt drift.</text></svg>

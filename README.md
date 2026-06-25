@@ -1,138 +1,178 @@
 <div align="center">
 
-# QuantGPT
+# worldquant-harness
 
-**Agent-Driven LLM Quant Research Engine — Autonomous Factor Mining at WorldQuant BRAIN Submission Quality**
+**A WorldQuant-oriented Agent Research Harness — sandbox, gate, evaluate, remember, evolve**
 
-LLM Agent 自治因子挖矿 → 批量回测 → 多维评分 → 反过拟合验证 → WQ BRAIN 自动提交 | 全程零人工干预
+LLM Agent 生成候选 → Harness 记录、过滤、评分、沉淀 → 人工选择后显式提交
 
-[![CI](https://github.com/Miasyster/quantgpt/actions/workflows/ci.yml/badge.svg)](https://github.com/Miasyster/quantgpt/actions/workflows/ci.yml)
+[![CI](https://github.com/gyx09212214-prog/worldquant-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/gyx09212214-prog/worldquant-harness/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React_18-TypeScript-61DAFB?logo=react&logoColor=white)](https://react.dev)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 [Quick Start](docs/QUICKSTART.md) ·
+[Visual Guide](docs/VISUAL_GUIDE.md) ·
+[Public Harness Demo](docs/PUBLIC_HARNESS_DEMO.md) ·
+[Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) ·
+[Agent Roles](docs/AGENT_ROLES.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
 [API Docs](docs/API_DOC.md) ·
 [MCP Guide](docs/MCP_GUIDE.md) ·
-[Factor Mining](docs/FACTOR_MINING.md) ·
-[Contributing](CONTRIBUTING.md)
+[WQ Workflow](docs/WQ_WORKFLOW.md) ·
+[Safety](docs/SECURITY_AND_LIMITATIONS.md) ·
+[Disclaimer](DISCLAIMER.md) ·
+[Security](SECURITY.md) ·
+[Audit](docs/OPEN_SOURCE_AUDIT.md) ·
+[Release Checklist](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[Code of Conduct](CODE_OF_CONDUCT.md)
 
-<a href="https://star-history.com/#Miasyster/QuantGPT&Date">
-  <img src="docs/images/star-history.png" width="600" alt="Star History Chart" />
-</a>
+<img src="docs/images/worldquant-harness-overview.svg" width="920" alt="worldquant-harness agent research harness overview" />
+
+Start with the [Visual Guide](docs/VISUAL_GUIDE.md) to inspect the public demo trace, memory feedback graph, factor map, quality review, and profile evolution timeline.
 
 </div>
 
 ---
 
-## What Is QuantGPT
+## Visual Overview
 
-QuantGPT is an **agent-driven factor research engine** — not a backtest library, not a chatbot wrapper. It gives an LLM Agent (Claude, via MCP) a complete toolkit to autonomously discover, evaluate, iterate, and submit alpha factors to WorldQuant BRAIN, with zero human intervention per research cycle.
+These visuals are public-safe. They use synthetic demo artifacts or sanitized boundary diagrams.
 
-The core architecture:
+| Harness Loop | Artifact Lifecycle |
+|:--:|:--:|
+| ![worldquant-harness overview](docs/images/worldquant-harness-overview.svg) | ![artifact lifecycle](docs/images/harness-artifact-lifecycle.svg) |
 
-```
-LLM Agent (Claude Code / Claude Desktop)
-    │
-    ├── MCP Tools (14 个)         ← Agent 的工具箱
-    │   ├── run_backtest           ← 全市场分组回测
-    │   ├── score_factor           ← 0-100 综合评分
-    │   ├── diagnose_factor        ← 失败模式诊断
-    │   ├── run_anti_overfit       ← 4 项反过拟合检验
-    │   ├── run_rolling_validation ← Walk-forward 验证
-    │   ├── validate_expression    ← 语法校验
-    │   ├── list_operators         ← 50+ 算子文档
-    │   ├── list_universes         ← 股票池和基准
-    │   ├── wq_brain_submit        ← WQ BRAIN 单因子提交
-    │   ├── wq_brain_batch_submit  ← 批量参数扫描提交
-    │   ├── wq_brain_submit_by_ids ← 按 ID 提交
-    │   ├── wq_brain_list_alphas   ← 查询已提交 alpha
-    │   ├── wq_brain_check_alphas  ← 检查 alpha 状态
-    │   └── wq_brain_finalize_submissions ← 最终提交确认
-    │
-    ├── Evolution Engine           ← 因子进化引擎
-    │   ├── MutationEngine (8 方向突变)
-    │   ├── CrossoverEngine (高分因子交叉)
-    │   ├── MetaEvolutionSelector (自适应策略)
-    │   └── TrajectoryAnalyzer (轨迹分析)
-    │
-    ├── WQ BRAIN Integration       ← WorldQuant 直连
-    │   ├── Dollar-neutral 模拟
-    │   ├── IS 检测对齐
-    │   ├── Fitness 评分
-    │   └── 一键正式提交
-    │
-    └── Knowledge Base             ← 跨会话知识积累
-        ├── rules/    (已验证规则)
-        ├── findings/ (经验发现)
-        └── failures/ (已证伪路径)
+| Public Demo Trace | Memory Feedback |
+|:--:|:--:|
+| ![public demo trace](docs/images/public-demo-trace.svg) | ![memory feedback graph](docs/images/memory-feedback-graph.svg) |
+
+| Submit Boundary | Release Boundary |
+|:--:|:--:|
+| ![submit boundary](docs/images/submit-boundary.svg) | ![release safety boundary](docs/images/release-safety-boundary.svg) |
+
+## What Is worldquant-harness
+
+worldquant-harness is not an alpha generator. It is a research harness that turns an LLM agent's alpha ideas into auditable, replayable, gated research artifacts.
+
+The LLM proposes. The harness records, validates, rejects, scores, remembers, and evolves. Real WQ BRAIN submission remains a separate, explicit command path for selected alpha IDs after human review.
+
+worldquant-harness 不是单个因子生成器。它是 Agent 研究约束层。
+
+Agent 提出想法。Harness 记录、校验、拒绝、评分、沉淀、进化。真实提交只走显式命令。
+
+This project is not affiliated with or endorsed by WorldQuant or WorldQuant BRAIN. See [Disclaimer](DISCLAIMER.md) and [Security Policy](SECURITY.md) before connecting credentials or publishing artifacts.
+
+本项目不是 WorldQuant 官方项目。接入凭证或发布产物前，请先看 [Disclaimer](DISCLAIMER.md) 与 [Security Policy](SECURITY.md)。
+
+The Python module and CLI entrypoint are `worldquant_harness`:
+
+```bash
+python -m worldquant_harness --transport http
 ```
 
-### How It Differs from "AI Backtest Tools"
+The fastest way to understand the project is the public visual pack:
 
-传统工具（包括 ChatGPT + 回测库）的模式是：**人类想因子 → 工具跑回测 → 人类看结果**。Agent 是执行者，人类是决策者。
+| Visual | What it explains |
+|:--|:--|
+| [Overview](docs/images/worldquant-harness-overview.svg) | Human goal → agent → harness → memory → profile → explicit review |
+| [Artifact lifecycle](docs/images/harness-artifact-lifecycle.svg) | Candidate specs → simulations → review queue → ready/rejected → memory/profile |
+| [Trace funnel](docs/images/public-demo-trace.svg) | `candidate_uid` lifecycle from generated candidate to ready/rejected |
+| [Memory graph](docs/images/memory-feedback-graph.svg) | How self-correlation and other blockers become reusable memory |
+| [Quality dashboard](docs/images/quality-review-dashboard.svg) | How generated and submitted alpha quality are reviewed |
+| [Submit boundary](docs/images/submit-boundary.svg) | Which commands are no-submit, check-only, and real submit |
+| [Release boundary](docs/images/release-safety-boundary.svg) | What is publishable, private, and review-required |
 
-QuantGPT 的模式是：**人类定义目标 → Agent 自治研究 → 人类审阅产出**。Agent 是研究者，人类是审阅者。
+## Why Harness, Not Just Alpha Generation
 
-这不是接口层的区别（自然语言 vs. 代码），而是**决策权**的区别。Agent 自主决定：探索哪个方向、生成什么表达式、评估哪些指标、何时迭代、何时放弃、何时提交。
+Most AI quant tools stop at "prompt → expression → backtest". That is not enough for an autonomous research agent. The hard part is not producing one expression; it is keeping thousands of candidate decisions traceable, constrained, comparable, and reusable.
 
-### Production Track Record
+多数 AI 回测工具停在“提示词 → 表达式 → 回测”。这不够。
 
-| Metric | Value |
-|:-------|:------|
-| 累计回测任务 | **370+** |
-| 单轮迭代（8 候选因子） | **~15 分钟** |
-| 表达式算子标准 | **WorldQuant BRAIN 对齐** |
-| BRAIN 正式提交 | **3 个因子 IS 全部 PASS，已提交（最佳 Fitness 1.26）** |
-| WQ BRAIN 集成 | **内置 API — 一键模拟 + 自动提交** |
+难点不是生成一个表达式。难点是让上千个候选有来源、有状态、有拒绝原因、有复盘入口。
+
+| Common AI backtest tool | worldquant-harness |
+|:--|:--|
+| Prompt produces one factor | Agent produces a candidate batch |
+| Result is ad hoc | Every candidate has lifecycle artifacts |
+| Failures are forgotten | Failures become memory and constraints |
+| Submission boundary is unclear | Sandbox and presubmit never submit |
+| Iteration depends on chat history | Profile evolution is versioned |
+| Hard to audit | JSONL/YAML/Markdown artifacts are replayable |
+
+## Agent Contract
+
+The agent can explore, but it works inside a contract. The harness owns the state.
+
+Agent 可以探索。Harness 管状态。
+
+The contract is now executable. `harness_contracts.py` defines `HarnessRun`, `HarnessStep`, `HarnessEvent`, `ArtifactRef`, `DecisionGate`, `MemoryDelta`, and `ProfilePatch`. `harness_runner.py` writes these files from the public no-submit eval path.
+
+契约可执行。`harness_contracts.py` 定义 run、step、event、artifact、decision、memory delta、profile patch。`harness_runner.py` 从公开 no-submit eval 写出这些产物。
+
+| Agent action | Harness control |
+|:--|:--|
+| Generate candidates | Stable `candidate_uid`, source tags, field/operator extraction |
+| Run experiments | Sandbox artifacts, no-submit default |
+| Interpret results | Structured review queue and rejection reasons |
+| Learn from failures | Memory records, blocked signatures, field-family stats |
+| Plan next iteration | Profile evolution and explicit child experiment |
+| Submit | Human-selected alpha IDs only |
+
+See [Agent Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) and [Agent Roles](docs/AGENT_ROLES.md) for the JSON/JSONL files and role boundaries.
+
+## Reproducible Public Demo
+
+The public demo is the open-source contract. It uses synthetic fixtures and fake platform adapters, so it requires no WQ BRAIN, DeepSeek, Wind, or private credentials.
+
+公开 demo 是项目的复现实例。它使用合成数据和 fake adapter。它不需要平台账号。
+
+```text
+candidate_specs
+  -> presubmit simulation
+  -> review_queue
+  -> presubmit_ready / presubmit_rejected
+  -> alpha_lifecycle_events
+  -> harness score
+  -> profile candidate
+  -> child experiment
+```
+
+Key artifacts:
+
+| Artifact | Purpose |
+|:--|:--|
+| `candidate_specs.jsonl` | Candidate source and design intent |
+| `simulation_results.jsonl` | Simulated outcomes from guarded adapters |
+| `review_queue.jsonl` | Candidates ready for gate review |
+| `presubmit_ready_sequential.jsonl` | Accepted candidates |
+| `presubmit_rejected.jsonl` | Rejection reasons and blocker memory |
+| `alpha_lifecycle_events.jsonl` | Append-only candidate lifecycle |
+| `eval_summary.json` | Harness score and gate decision |
+| `evolution_result.json` | Next-generation profile candidate |
+
+Run it:
+
+```bash
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
+pip install -e ".[dev]"
+python scripts/run_public_harness_demo.py --output-root reports/public_harness_demo
+python scripts/validate_public_harness_artifacts.py reports/public_harness_demo
+python scripts/run_public_harness_eval.py --output-root reports/public_harness_eval
+```
 
 ---
 
-## Validated Results — Factors Submitted to BRAIN
+## Agent Harness Loop
 
-QuantGPT Agent 已产出 **3 个正式提交因子**，全部通过 WQ BRAIN IS 检测：
-
-| Factor | Expression | WQ Sharpe | WQ Fitness | WQ Returns | IS Tests | Status |
-|:-------|:-----------|:---------:|:----------:|:----------:|:--------:|:------:|
-| **Debt-Momentum Composite** | `-1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)` | **1.77** | **1.26** | **20.18%** | **ALL PASS** | **Submitted** |
-| **VWAP Decay Reversal** | `-1 * rank(ts_decay_linear(close / vwap, 10))` | **1.69** | **1.07** | **18.63%** | **ALL PASS** | **Submitted** |
-| **Returns-Volume Momentum** | `-1 * rank(ts_decay_linear(returns * volume / adv20, 5))` | **1.60** | **1.03** | **24.15%** | **ALL PASS** | **Submitted** |
-
-> 3 个因子代表不同的 alpha 来源：**Debt-Momentum** 结合动量反转与基本面（债务/企业价值），行业中性化；**VWAP Decay Reversal** 捕捉价格偏离 VWAP 的衰减回归，市场中性化；**Returns-Volume Momentum** 捕捉收益率与相对成交量的衰减动量，市场中性化。全程 Agent 自治完成。
-
-<p align="center">
-  <img src="example_factor/1-1.png" width="49%" alt="WQ BRAIN PnL — Debt-Momentum Composite (Submitted)" />
-  <img src="example_factor/1-2.png" width="49%" alt="WQ BRAIN IS Summary — Debt-Momentum Composite (Submitted)" />
-</p>
-<p align="center">
-  <sub>Debt-Momentum Composite — 已正式提交：Sharpe 1.77, Fitness 1.26, Returns 20.18%, IS 全部 PASS</sub>
-</p>
-
-<p align="center">
-  <img src="example_factor/2-1.png" width="49%" alt="WQ BRAIN PnL — VWAP Decay Reversal (Submitted)" />
-  <img src="example_factor/2-2.png" width="49%" alt="WQ BRAIN IS Summary — VWAP Decay Reversal (Submitted)" />
-</p>
-<p align="center">
-  <sub>VWAP Decay Reversal — 已正式提交：Sharpe 1.69, Fitness 1.07, Returns 18.63%, IS 全部 PASS</sub>
-</p>
-
-<p align="center">
-  <img src="example_factor/3-1.png" width="49%" alt="WQ BRAIN PnL — Returns-Volume Momentum (Submitted)" />
-  <img src="example_factor/3-2.png" width="49%" alt="WQ BRAIN IS Summary — Returns-Volume Momentum (Submitted)" />
-</p>
-<p align="center">
-  <sub>Returns-Volume Momentum — 已正式提交：Sharpe 1.60, Fitness 1.03, Returns 24.15%, IS 全部 PASS</sub>
-</p>
-
----
-
-## Autonomous Factor Mining — The Core Loop
-
-> **This is QuantGPT's defining capability.**
+> **This is worldquant-harness' defining capability.**
 >
-> Agent 读知识库、设计假设、批量实验、分析结果、积累知识、自我迭代，每个结论经过双模型交叉验证。一个研究循环产出经过验证的、可提交 WQ BRAIN 的因子。
+> The agent searches. The harness records source, rejects duplicates and illegal inputs, runs the presubmit gate, computes the harness score, and writes the next profile.
+>
+> Agent 搜索。Harness 记录来源。Harness 拒绝重复和非法输入。Harness 评分。Harness 写入下一轮 profile。
 
 ### Research Cycle
 
@@ -172,8 +212,8 @@ QuantGPT Agent 已产出 **3 个正式提交因子**，全部通过 WQ BRAIN IS 
                     ▼
           ┌──────────────────┐
           │  Phase 6: Report │
-          │  A/B factors +   │
-          │  new knowledge   │
+          │  Ready/rejected  │
+          │  artifacts + KB  │
           └──────────────────┘
 ```
 
@@ -241,7 +281,45 @@ results = batch_evaluate(
 </tr>
 </table>
 
-> **上面 Validated Results 中的因子就是这个流程的产出。** 多轮迭代，3 个因子正式提交 WQ BRAIN（IS 全部通过）。完整方法论见 [Factor Mining Guide](docs/FACTOR_MINING.md)。
+> 当前公开复现入口是 [Public Harness Demo](docs/PUBLIC_HARNESS_DEMO.md)。标准 agent contract 回归入口是 [Agent Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) 中的 `run_public_harness_eval.py`。完整 WQ 运行边界见 [WorldQuant Workflow](docs/WQ_WORKFLOW.md)。
+
+---
+
+## Historical Validation Examples
+
+The public demo is the reproducible contract. The examples below are historical validation samples from real platform runs. They show that the harness output can reach submit-quality candidates, but they are not required to run the open-source demo.
+
+公开 demo 是复现入口。下面是历史验证样本。它们说明 harness 能产出可提交候选。运行开源 demo 不需要这些截图。
+
+| Factor | Expression | WQ Sharpe | WQ Fitness | WQ Returns | IS Tests | Status |
+|:-------|:-----------|:---------:|:----------:|:----------:|:--------:|:------:|
+| **Debt-Momentum Composite** | `-1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)` | **1.77** | **1.26** | **20.18%** | **ALL PASS** | **Submitted** |
+| **VWAP Decay Reversal** | `-1 * rank(ts_decay_linear(close / vwap, 10))` | **1.69** | **1.07** | **18.63%** | **ALL PASS** | **Submitted** |
+| **Returns-Volume Momentum** | `-1 * rank(ts_decay_linear(returns * volume / adv20, 5))` | **1.60** | **1.03** | **24.15%** | **ALL PASS** | **Submitted** |
+
+<p align="center">
+  <img src="example_factor/1-1.png" width="49%" alt="WQ BRAIN PnL - Debt-Momentum Composite" />
+  <img src="example_factor/1-2.png" width="49%" alt="WQ BRAIN IS Summary - Debt-Momentum Composite" />
+</p>
+<p align="center">
+  <sub>Debt-Momentum Composite - Sharpe 1.77, Fitness 1.26, Returns 20.18%, IS all pass</sub>
+</p>
+
+<p align="center">
+  <img src="example_factor/2-1.png" width="49%" alt="WQ BRAIN PnL - VWAP Decay Reversal" />
+  <img src="example_factor/2-2.png" width="49%" alt="WQ BRAIN IS Summary - VWAP Decay Reversal" />
+</p>
+<p align="center">
+  <sub>VWAP Decay Reversal - Sharpe 1.69, Fitness 1.07, Returns 18.63%, IS all pass</sub>
+</p>
+
+<p align="center">
+  <img src="example_factor/3-1.png" width="49%" alt="WQ BRAIN PnL - Returns-Volume Momentum" />
+  <img src="example_factor/3-2.png" width="49%" alt="WQ BRAIN IS Summary - Returns-Volume Momentum" />
+</p>
+<p align="center">
+  <sub>Returns-Volume Momentum - Sharpe 1.60, Fitness 1.03, Returns 24.15%, IS all pass</sub>
+</p>
 
 ---
 
@@ -249,7 +327,7 @@ results = batch_evaluate(
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│                     QuantGPT Research Engine                       │
+│                  worldquant-harness Research Engine                │
 ├─────────────┬──────────────────────────────┬───────────────────────┤
 │             │         Core Engine          │                       │
 │  Agent      │  ┌──────────────────────┐   │   Data Layer          │
@@ -311,7 +389,7 @@ results = batch_evaluate(
 | Statistical Tests | `anti_overfit.py` | IC 稳定性 + 子样本压力测试（牛/熊/震荡）+ 安慰剂检验 + 半衰期估计 |
 | Walk-Forward | `rolling_validator.py` | 滚动 train/valid/test 窗口，评估样本外 IC 衰减 |
 | WQ Simulation | `wq_simulate.py` | Dollar-neutral 多空模拟，对齐 BRAIN 的 Sharpe/Turnover/Fitness 计算 |
-| **WQ BRAIN API** | `wq_brain_client.py` | **直连 BRAIN 平台 — 真实模拟 + IS 检测 + 一键正式提交** |
+| **WQ BRAIN API** | `wq_brain_client.py` | **直连 BRAIN 平台 — 真实模拟 + check-only 检测 + 显式提交** |
 
 ### 3. Evolutionary Factor Iteration
 
@@ -334,18 +412,31 @@ TrajectoryAnalyzer → MetaEvolutionSelector → Strategy Execution
 | **Web UI** | Monitoring dashboard | 任务监控、报告查看、因子库管理 |
 
 <details>
-<summary><b>MCP Tools (8 个)</b></summary>
+<summary><b>MCP Tools (21 个)</b></summary>
 
 | Tool | Description |
 |:-----|:------------|
 | `list_operators` | 全部算子文档 |
 | `list_universes` | 股票池和基准 |
 | `validate_expression` | 语法校验 |
+| `wq_harness_new` | 创建 no-submit harness run |
+| `wq_harness_run_presubmit` | 运行 no-submit public demo/eval wrapper |
+| `wq_harness_evaluate` | 评估 sandbox experiment |
+| `wq_harness_evolve` | 生成下一轮 profile/experiment candidate |
+| `wq_harness_history_ingest` | 沉淀本地历史经验，默认不连平台 |
+| `wq_harness_memory_maintain` | 生成 memory maintenance 和 memory delta |
+| `wq_harness_status` | 读取 persisted harness 状态 |
 | `run_backtest` | 完整回测 |
 | `score_factor` | 评分（0–100, A/B/C/D） |
 | `diagnose_factor` | 失败模式诊断 + 改进建议 |
 | `run_anti_overfit` | 4 项反过拟合检验 |
 | `run_rolling_validation` | Walk-forward 验证 |
+| `wq_brain_submit` | 显式单因子模拟/提交路径 |
+| `wq_brain_batch_submit` | 显式批量参数扫描路径 |
+| `wq_brain_submit_by_ids` | 按选定 alpha ID 显式提交 |
+| `wq_brain_list_alphas` | 查询平台 alpha |
+| `wq_brain_check_alphas` | check-only 状态检查 |
+| `wq_brain_finalize_submissions` | 最终提交确认 |
 
 </details>
 
@@ -353,15 +444,15 @@ TrajectoryAnalyzer → MetaEvolutionSelector → Strategy Execution
 
 ## Competitive Landscape
 
-| Capability | JoinQuant | Backtrader | ChatGPT + Backtest | **QuantGPT** |
+| Capability | JoinQuant | Backtrader | ChatGPT + Backtest | **worldquant-harness** |
 |:-----------|:------:|:------:|:------:|:------:|
 | Research mode | Human writes code | Human writes code | Human prompts, tool executes | **Agent autonomously researches** |
 | Factor discovery | Manual | Manual | One-shot LLM | **Multi-round evolution + knowledge base** |
 | Anti-bias | Researcher judgment | None | None | **Dual-LLM mandatory cross-review** |
 | Knowledge accumulation | Personal notes | None | Lost between sessions | **Structured KB across sessions** |
-| WQ BRAIN integration | -- | -- | -- | **Operator-aligned + direct submission** |
+| WQ BRAIN integration | -- | -- | -- | **Operator-aligned + guarded explicit submission** |
 | Anti-overfit | -- | -- | -- | **4 statistical tests + walk-forward** |
-| MCP / AI Agent | -- | -- | -- | **14 tools, skill-loop orchestration** |
+| MCP / AI Agent | -- | -- | -- | **21 tools, contract-driven harness orchestration** |
 | Live trading | Yes | Limited | -- | -- |
 | Intraday data | Yes | Yes | -- | Daily only |
 
@@ -369,10 +460,39 @@ TrajectoryAnalyzer → MetaEvolutionSelector → Strategy Execution
 
 ## Quick Start
 
-### Option 1: Agent Mode (Recommended)
+### Option 1: Public Harness Demo (No Credentials)
+
+Run the deterministic harness demo first. It does not require WQ BRAIN, DeepSeek, Wind, or private data.
 
 ```bash
-git clone https://github.com/Miasyster/QuantGPT.git && cd QuantGPT
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git && cd worldquant-harness
+pip install -e ".[dev]"
+python scripts/run_public_harness_demo.py --output-root reports/public_harness_demo
+python scripts/validate_public_harness_artifacts.py reports/public_harness_demo
+python scripts/run_public_harness_eval.py --output-root reports/public_harness_eval
+python scripts/wq_submit_efficiency_report.py \
+  --run-roots reports/public_harness_demo \
+  --current-name public-demo \
+  --output reports/public_harness_demo/efficiency_summary.json \
+  --markdown-output reports/public_harness_demo/efficiency_summary.md \
+  --events-output reports/public_harness_demo/efficiency_events.jsonl
+python scripts/wq_alpha_quality_review.py \
+  --reports reports/public_harness_demo \
+  --no-platform \
+  --no-profile-candidate \
+  --output-dir reports/public_harness_demo/quality_review
+python scripts/build_public_visual_pack.py \
+  --source reports/public_harness_demo \
+  --output-dir docs/images \
+  --report docs/VISUAL_GUIDE.md
+```
+
+The demo creates a sandbox experiment, runs `presubmit-sequential` with fake platform adapters, applies the gate, computes a harness score, and creates the next-generation child experiment. The eval command wraps the same path and writes `harness_run.json`, `agent_trace.jsonl`, `eval_cases.jsonl`, `memory_delta.jsonl`, and `profile_patch.json`. It never calls a real submit endpoint.
+
+### Option 2: Agent Mode
+
+```bash
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git && cd worldquant-harness
 make setup   # creates venv, installs deps, generates .env
 make run     # starts server at http://localhost:8003
 ```
@@ -382,17 +502,17 @@ Add MCP configuration to Claude Code or Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "quantgpt": {
+    "worldquant-harness": {
       "command": "python",
-      "args": ["-m", "quantgpt"]
+      "args": ["-m", "worldquant_harness"]
     }
   }
 }
 ```
 
-Then let the Agent work: *"在沪深300上挖掘高 fitness 的因子，目标 WQ BRAIN 可提交"*
+Then let the Agent work: *"为一个新的因子方向创建 sandbox，生成候选，运行 presubmit gate，并输出 ready/rejected artifacts"*
 
-### Option 2: Expression Mode (No LLM Required)
+### Option 3: Expression Mode (No LLM Required)
 
 ```bash
 # Direct expression backtest via API
@@ -404,41 +524,41 @@ curl -X POST http://localhost:8003/api/v1/auto_backtest \
 
 ### Windows Quick Start
 
-Windows 用户不需要 `make` 和 `restart.sh`，手动执行即可：
+Windows 用户可手动执行：
 
 ```powershell
-# 1. 克隆项目
-git clone https://github.com/Miasyster/QuantGPT.git
-cd QuantGPT
+# 1. Clone
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
 
-# 2. 创建虚拟环境并安装依赖
+# 2. Environment
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
-# 可选：装 PostgreSQL 支持
+# Optional PostgreSQL
 # pip install -e ".[postgresql]"
 
-# 3. 构建前端（需要 Node.js，从 nodejs.org 下载 LTS 版本）
+# 3. Frontend
 cd frontend && npm install && npm run build && cd ..
 
-# 4. 启动服务
-python -m quantgpt --transport http
-# 浏览器打开 http://localhost:8003
+# 4. Server
+python -m worldquant_harness --transport http
+# Open http://localhost:8003
 ```
 
 > **注意：**
-> - 推荐 Python 3.11 或 3.12（3.14 太新，部分依赖可能不兼容）
-> - 如果端口被占用：`netstat -ano | findstr :8003` 查进程，`taskkill /PID <pid> /F` 杀掉
-> - 也可以使用 WSL2（`wsl --install`），体验与 macOS/Linux 完全一致
+> - 推荐 Python 3.11 或 3.12
+> - 端口占用：`netstat -ano | findstr :8003`，再 `taskkill /PID <pid> /F`
+> - WSL2 可用
 
-**Zero config by default**: SQLite database, baostock + akshare free data. See [full Quick Start guide](docs/QUICKSTART.md) for details.
+**Zero config by default**: the public harness demo uses synthetic fixtures; local expression backtests use SQLite plus baostock/akshare free data. See [full Quick Start guide](docs/QUICKSTART.md) for details.
 
 <details>
 <summary><b>Optional: DeepSeek API (for factor generation & cross-review)</b></summary>
 
 ```bash
 # Edit .env, add your DeepSeek API key (~$0.001 per query)
-DEEPSEEK_API_KEY=sk-your-key-here
+DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
 
 </details>
@@ -447,9 +567,9 @@ DEEPSEEK_API_KEY=sk-your-key-here
 <summary><b>Optional: PostgreSQL (for production)</b></summary>
 
 ```bash
-pip install "quantgpt[postgresql]"
+pip install -e ".[postgresql]"
 # Edit .env:
-DATABASE_URL=postgresql+asyncpg://quantgpt:password@localhost:5432/quantgpt
+DATABASE_URL=postgresql+asyncpg://worldquant_harness:password@localhost:5432/worldquant_harness
 alembic upgrade head
 ```
 
@@ -474,17 +594,11 @@ decay_linear(rank(ts_corr(vwap, volume, 10)), 5)
 -1 * rank(ts_av_diff(close, 10)) + rank(roe)
 ```
 
-**WQ BRAIN remote** — requires WQ BRAIN submission (fields like `debt`, `enterprise_value` are not available locally):
+**WQ BRAIN remote** — requires WQ BRAIN credentials and explicit submit/check commands. Keep public examples generic unless a platform output has been sanitized and approved for release:
 
 ```python
-# Debt-momentum composite — BRAIN submitted, Fitness 1.26, Sharpe 1.77
--1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)
-
-# VWAP decay reversal — BRAIN submitted, Fitness 1.07, Sharpe 1.69
--1 * rank(ts_decay_linear(close / vwap, 10))
-
-# Returns-volume momentum — BRAIN submitted, Fitness 1.03, Sharpe 1.60
--1 * rank(ts_decay_linear(returns * volume / adv20, 5))
+# Example only; run through presubmit/check-only before any explicit submit.
+rank(ts_decay_linear(rank(close / vwap), 10))
 ```
 
 </details>
@@ -494,13 +608,15 @@ decay_linear(rank(ts_corr(vwap, volume, 10)), 5)
 ## Project Structure
 
 ```
-quantgpt/
-├── quantgpt/                    # Backend (Python)
+worldquant-harness/
+├── worldquant_harness/                    # Backend (Python)
 │   ├── expression_parser.py     # Factor expression parser (50+ ops, WQ compatible)
 │   ├── backtest.py              # Rank-based group backtest engine
 │   ├── market_data.py           # baostock/akshare → Parquet cache
 │   ├── api_server.py            # FastAPI REST API + SSE
-│   ├── mcp_server.py            # FastMCP server (14 tools — Agent's toolkit)
+│   ├── mcp_server.py            # FastMCP server (21 tools, including harness contract tools)
+│   ├── harness_contracts.py     # Stable agent/harness JSON and JSONL contracts
+│   ├── harness_runner.py        # No-submit public eval, history, memory, status wrappers
 │   ├── iteration.py             # 3-phase evolutionary iteration
 │   ├── mutation_engine.py       # 8 directed mutation strategies
 │   ├── crossover_engine.py      # High-score factor crossover
@@ -517,8 +633,8 @@ quantgpt/
 │   └── src/components/          # Monitoring dashboard
 ├── scripts/
 │   └── factor_miner.py          # Batch factor evaluation toolkit
-├── tests/                       # 74 tests (parser + backtest + WQ simulate)
-├── example_factor/              # BRAIN validation screenshots
+├── tests/                       # parser, backtest, WQ workflow, harness, and API tests
+├── example_factor/              # Optional validation examples; review before public release
 └── docs/                        # Architecture, API, MCP, Mining guides
 ```
 
@@ -529,15 +645,24 @@ quantgpt/
 - **Daily frequency only** — no intraday backtesting
 - **A-share market only** — China mainland equities
 - **Agent quality depends on LLM** — better models produce better factors
+- **Public harness demo uses synthetic fixtures** — it validates workflow mechanics, not investment performance
+- **Real platform submission is guarded** — sandbox and presubmit flows do not submit; live submission requires explicit commands and credentials
+
+## Responsible Use
+
+- Use your own credentials for external services and follow their terms, policies, rate limits, and data restrictions.
+- Treat `.env`, `.secrets/`, local databases, raw platform exports, submit/check ledgers, and full research reports as private.
+- Do not present generated factors, screenshots, or backtests as guaranteed returns.
+- Review [Open Source Audit](docs/OPEN_SOURCE_AUDIT.md) and [Release Checklist](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md) before publishing a fork or release.
 
 ---
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Miasyster
+[MIT](LICENSE). Copyright and attribution details are recorded in [NOTICE](NOTICE).
 
-This repository is the **original source** of the QuantGPT factor research engine.
-Derivative works should retain the copyright notice and comply with the MIT License terms.
-See [NOTICE](NOTICE) for details.
+This public release is maintained as `worldquant-harness`. Derivative works should
+retain the copyright notice and comply with the MIT License terms.
+See [NOTICE](NOTICE), [DISCLAIMER](DISCLAIMER.md), [SECURITY](SECURITY.md), and [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md) for details.
 
 <sub>*Past factor performance does not guarantee future returns. This project does not constitute investment advice.*</sub>

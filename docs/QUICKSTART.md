@@ -1,95 +1,138 @@
-# Quick Start — 5 分钟跑通第一个因子回测
+# Quick Start
 
-## Prerequisites
+This guide starts with the public harness demo because it is deterministic and
+does not require WQ BRAIN, DeepSeek, Wind, or private credentials.
 
-- Python 3.10+
-- Node.js 20+ (optional, for frontend dashboard)
+## 1. Public Harness Demo
 
-## 1. Clone & Setup
+```powershell
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -e ".[dev]"
 
-```bash
-git clone https://github.com/Miasyster/QuantGPT.git
-cd QuantGPT
-make setup
+python scripts/run_public_harness_demo.py --output-root reports/public_harness_demo
+python scripts/validate_public_harness_artifacts.py reports/public_harness_demo
+python scripts/wq_submit_efficiency_report.py `
+  --run-roots reports/public_harness_demo `
+  --current-name public-demo `
+  --output reports/public_harness_demo/efficiency_summary.json `
+  --markdown-output reports/public_harness_demo/efficiency_summary.md `
+  --events-output reports/public_harness_demo/efficiency_events.jsonl
+python scripts/wq_alpha_quality_review.py `
+  --reports reports/public_harness_demo `
+  --no-platform `
+  --no-profile-candidate `
+  --output-dir reports/public_harness_demo/quality_review
+python scripts/build_public_visual_pack.py `
+  --source reports/public_harness_demo `
+  --output-dir docs/images `
+  --report docs/VISUAL_GUIDE.md
 ```
 
-This creates a virtual environment, installs all dependencies, and generates `.env` from the template.
+The demo creates a guarded sandbox experiment, runs `presubmit-sequential` with
+fake platform/simulation/check adapters, applies the sandbox gate, evaluates the
+harness score, and creates a child experiment for the next generation. It never
+calls a real submit endpoint.
 
-**No API keys needed** for expression-only mode.
+Expected high-level result:
 
-## 2. Start the Server
+- `real_submit_attempted: false`
+- one ready candidate
+- duplicate, illegal-input, near-miss, and strict self-correlation rejection examples
+- `eval_summary.json`, `run_report.md`, and `evolution_result.json`
+- `efficiency_summary.md` with the candidate → simulation → ready funnel
+- `quality_review.md` with generated-alpha quality and self-correlation pressure
+- `docs/VISUAL_GUIDE.md` and `docs/images/*.svg` with the public visual onboarding pack
 
-```bash
-bash restart.sh
+See [PUBLIC_HARNESS_DEMO.md](PUBLIC_HARNESS_DEMO.md) and
+[HARNESS_ARTIFACTS_AND_SCORE.md](HARNESS_ARTIFACTS_AND_SCORE.md) for the output
+contract.
+
+## 2. Local Server And MCP Tools
+
+For local expression backtests and MCP access:
+
+```powershell
+pip install -e .
+python -m worldquant_harness --transport http
 ```
 
 The server starts at `http://localhost:8003`.
 
-## 3. Agent Mode (Recommended)
-
-Add MCP configuration to Claude Code or Claude Desktop:
+For Claude Code or Claude Desktop, add an MCP server that runs the Python module
+`worldquant_harness` in stdio mode:
 
 ```json
 {
   "mcpServers": {
-    "quantgpt": {
+    "worldquant-harness": {
       "type": "stdio",
-      "command": "python3",
-      "args": ["-m", "quantgpt"],
-      "cwd": "/path/to/QuantGPT"
+      "command": "python",
+      "args": ["-m", "worldquant_harness"],
+      "cwd": "/absolute/path/to/worldquant-harness"
     }
   }
 }
 ```
 
-Then let the Agent work:
-```
-在沪深300上挖掘高 fitness 的因子，目标 WQ BRAIN 可提交
+Example agent request:
+
+```text
+为一个新的因子方向创建 sandbox，生成候选，运行 presubmit gate，并输出 ready/rejected artifacts。
 ```
 
-## 4. Expression Mode (No LLM Required)
+## 3. Expression Mode
 
-Via API:
-```bash
-curl -X POST http://localhost:8003/api/v1/auto_backtest \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
+Expression-only mode does not require an LLM.
+
+```powershell
+curl -X POST http://localhost:8003/api/v1/auto_backtest `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer <token>" `
   -d '{"expression": "rank(close / ts_mean(close, 20))", "universe": "hs300"}'
 ```
 
-Or enter a factor expression directly in the web UI at `http://localhost:8003`.
+Or enter a factor expression directly in the web UI at
+`http://localhost:8003`.
 
-## 5. Try More Expressions
+## 4. Optional Credentials
 
+DeepSeek is only needed for model-generated candidates and cross-review:
+
+```text
+DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
-# Debt-momentum composite (submitted, Fitness 1.26, Sharpe 1.77)
--1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)
 
-# VWAP decay reversal (submitted, Fitness 1.07, Sharpe 1.69)
--1 * rank(ts_decay_linear(close / vwap, 10))
+WQ BRAIN credentials are only needed for real platform simulation/check/submit
+commands. Sandbox, public demo, and `presubmit-sequential` are guarded paths; a
+real submit requires an explicit submit command and selected IDs. See
+[WQ_WORKFLOW.md](WQ_WORKFLOW.md) and
+[SECURITY_AND_LIMITATIONS.md](SECURITY_AND_LIMITATIONS.md).
 
-# Returns-volume momentum (submitted, Fitness 1.03, Sharpe 1.60)
--1 * rank(ts_decay_linear(returns * volume / adv20, 5))
+## 5. More Examples
+
+Local backtest examples:
+
+```python
+# 20-day momentum
+rank(close / ts_mean(close, 20))
 
 # Volume anomaly
 rank(volume / ts_mean(volume, 10))
 
-# Value factor (needs fundamental data)
+# Low-volatility tilt
+rank(-1 * ts_std(close / ts_shift(close, 1) - 1, 20))
+
+# Value factor, when fundamental data is available
 rank(-1 * pe)
 ```
 
-## 6. Enable DeepSeek (Optional, for factor generation & cross-review)
+WQ-compatible expression examples, requiring credentials and explicit platform
+commands for remote checks:
 
-1. Get a DeepSeek API key from [platform.deepseek.com](https://platform.deepseek.com)
-2. Edit `.env`:
-   ```
-   DEEPSEEK_API_KEY=sk-your-key-here
-   ```
-3. Restart: `bash restart.sh`
-
-## What's Next
-
-- Read [ARCHITECTURE.md](ARCHITECTURE.md) for system design
-- Check [MCP_GUIDE.md](MCP_GUIDE.md) for MCP tool details
-- Read [FACTOR_MINING.md](FACTOR_MINING.md) for the autonomous research loop
-- Browse `example_factor/` for validated factor results with WQ BRAIN screenshots
+```python
+# Example only; run through presubmit/check-only before any explicit submit.
+rank(ts_decay_linear(rank(close / vwap), 10))
+```

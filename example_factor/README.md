@@ -1,6 +1,6 @@
-# QuantGPT — Submitted Factors (WQ BRAIN)
+# worldquant-harness — Submitted Factors (WQ BRAIN)
 
-Agent-driven factor research engine. Factors below were discovered, optimized, and submitted to WorldQuant BRAIN through QuantGPT's autonomous research loop. All passed IS tests.
+Agent-driven factor research engine. Factors below were discovered, optimized, and submitted to WorldQuant BRAIN through worldquant-harness's autonomous research loop. All passed IS tests.
 
 ---
 

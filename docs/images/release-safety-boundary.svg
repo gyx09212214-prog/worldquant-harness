@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness open-source release boundary</title>
+<desc id="desc">Public-safe diagram of publishable, private, and review-required release assets.</desc>
+<style>
+  .title{font:700 28px Arial,sans-serif;fill:#17202a}
+  .subtitle{font:400 15px Arial,sans-serif;fill:#5c6670}
+  .label{font:700 16px Arial,sans-serif;fill:#17202a}
+  .body{font:400 13px Arial,sans-serif;fill:#5c6670}
+  .tiny{font:400 12px Arial,sans-serif;fill:#5c6670}
+  .metric{font:700 22px Arial,sans-serif;fill:#17202a}
+</style>
+<rect width="1120" height="560" fill="#ffffff"/>
+<text x="48" y="54" class="title">Open-source release boundary</text>
+<text x="48" y="82" class="subtitle">Publish the harness and synthetic demo. Keep credentials, raw platform data, and private research ledgers out of the public repository.</text>
+
+<rect x="60" y="128" width="310" height="272" rx="10" fill="#e8f6ee" stroke="#1f9d55" stroke-width="2"/>
+<text x="88" y="166" class="metric">Publishable</text>
+<text x="88" y="210" class="body">worldquant_harness/ source</text>
+<text x="88" y="234" class="body">tests/ and public fixtures</text>
+<text x="88" y="258" class="body">docs/ and sanitized SVGs</text>
+<text x="88" y="282" class="body">public harness demo scripts</text>
+<text x="88" y="306" class="body">LICENSE, NOTICE, DISCLAIMER</text>
+<text x="88" y="330" class="body">SECURITY and CONTRIBUTING</text>
+
+<rect x="405" y="128" width="310" height="272" rx="10" fill="#fff4df" stroke="#c47f17" stroke-width="2"/>
+<text x="433" y="166" class="metric">Review Required</text>
+<text x="433" y="210" class="body">example_factor screenshots</text>
+<text x="433" y="234" class="body">real platform metrics</text>
+<text x="433" y="258" class="body">exact submitted expressions</text>
+<text x="433" y="282" class="body">third-party references</text>
+<text x="433" y="306" class="body">generated reports with paths</text>
+<text x="433" y="330" class="body">full field registries</text>
+
+<rect x="750" y="128" width="310" height="272" rx="10" fill="#fdecec" stroke="#d64545" stroke-width="2"/>
+<text x="778" y="166" class="metric">Private By Default</text>
+<text x="778" y="210" class="body">.env and .secrets/</text>
+<text x="778" y="234" class="body">data/, reports/, logs/</text>
+<text x="778" y="258" class="body">local databases</text>
+<text x="778" y="282" class="body">raw submit/check ledgers</text>
+<text x="778" y="306" class="body">browser cookies and sessions</text>
+<text x="778" y="330" class="body">private candidate batches</text>
+
+<rect x="88" y="438" width="944" height="70" rx="10" fill="#f7f9fb" stroke="#d8dde3"/>
+<text x="116" y="468" class="label">Release gate</text>
+<text x="116" y="494" class="body">Run git status, git check-ignore, secret/alpha ID scans, ruff, pytest, public demo validation, and a human screenshot/metrics review.</text>
+<text x="48" y="536" class="tiny">The public repository should demonstrate the harness, not disclose the private research corpus.</text>
+</svg>

@@ -1,12 +1,12 @@
-# Contributing to QuantGPT
+# Contributing to worldquant-harness
 
-感谢你对 QuantGPT 的关注！以下是参与贡献的指南。
+感谢你对 worldquant-harness 的关注！以下是参与贡献的指南。
 
 ## Getting Started
 
 ```bash
-git clone https://github.com/Miasyster/QuantGPT.git
-cd quantgpt
+git clone https://github.com/gyx09212214-prog/worldquant-harness.git
+cd worldquant-harness
 make setup      # creates venv, installs deps, copies .env
 make test       # run tests
 make lint       # ruff + pyright
@@ -30,7 +30,7 @@ No paid API keys required for basic development — the expression engine and ba
 ## Project Structure
 
 ```
-quantgpt/                  # Python backend
+worldquant_harness/                  # Python backend
 ├── api_server.py          # FastAPI app + routes
 ├── expression_parser.py   # Factor expression engine (50+ operators)
 ├── backtest.py            # Group backtest engine
@@ -95,6 +95,30 @@ The dev server proxies `/api` to `localhost:8003`. Run the backend with `make de
 - Include tests for new functionality
 - Update documentation if you change public APIs
 - CI must pass (lint + tests + frontend build)
+- Do not include private platform exports, raw submit/check ledgers, credentials,
+  browser cookies, local databases, or full research-history artifacts
+- Use synthetic fixtures for tests and public examples unless a real artifact has
+  been intentionally sanitized and approved for release
+
+## Security And Publication Boundary
+
+Before opening a PR, review:
+
+- [DISCLAIMER.md](DISCLAIMER.md)
+- [SECURITY.md](SECURITY.md)
+- [docs/SECURITY_AND_LIMITATIONS.md](docs/SECURITY_AND_LIMITATIONS.md)
+- [docs/OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md)
+
+Run:
+
+```bash
+git status --short
+git check-ignore -v .env .secrets data reports logs references local.db
+```
+
+If your change touches WQ BRAIN, WQ Community, credentials, submission commands,
+or report publication, state clearly whether it is read-only, no-submit,
+check-only, or submit-capable.
 
 ## Reporting Issues
 
@@ -106,3 +130,7 @@ Use the GitHub issue templates:
 ## License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
+
+You also agree that you have the right to submit your contribution and that it
+does not knowingly include confidential credentials, private platform data, or
+third-party material that cannot be redistributed under the project license.

@@ -16,6 +16,17 @@ build/
 data/
 reports/
 feedback/
+.test_tmp/
+
+# Local research references; do not publish without source/license review
+references/
+
+# Local/private WQ research inputs and submit batches
+configs/wq_legal_inputs*.json
+scripts/local_seed_expressions.json
+scripts/wq_loop_submit_candidates*.jsonl
+scripts/*submit_candidates*.private.jsonl
+scripts/*live_submit*.private.jsonl
 
 # Deploy (removed — local project only)
 deploy/

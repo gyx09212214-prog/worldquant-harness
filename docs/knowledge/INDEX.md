@@ -11,9 +11,10 @@ Permanent platform constraints and validated operational rules.
 - [SC Saturation Rule](rules/sc-saturation-rule.md) — Each operator family saturates at ~3-5 ACTIVEs before SC blocks further submissions
 
 ## Findings (Empirical Discoveries)
-Validated signal structures and operator behaviors from WQ BRAIN simulation.
+Sanitized signal-structure notes that show how a finding is recorded without
+publishing private platform outputs.
 
-- [VWAP Decay Reversal](findings/vwap-decay-reversal.md) — close/vwap decay_linear + fundamental composite factor family
+- [Price Anchor Reversal Pattern](findings/vwap-decay-reversal.md) — price-anchor reversal plus orthogonal overlay, with private metrics removed
 
 ## Failures (Dead Ends)
 Documented failed approaches — prevents re-exploring exhausted directions.

@@ -1,4 +1,4 @@
-# QuantGPT API 完整文档
+# worldquant-harness API 完整文档
 
 > 版本: v1 | 基础路径: `/api/v1` | 认证: Bearer Token (JWT)
 
@@ -32,10 +32,10 @@
 bash restart.sh   # 默认端口 8003
 
 # MCP 服务 (stdio)
-python -m quantgpt
+python -m worldquant_harness
 
 # 数据预热
-python -m quantgpt --prefetch hs300 csi500
+python -m worldquant_harness --prefetch hs300 csi500
 ```
 
 ### 环境变量
@@ -47,14 +47,14 @@ python -m quantgpt --prefetch hs300 csi500
 | `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com/v1` | LLM API 地址 |
 | `DEEPSEEK_MODEL` | 否 | `deepseek-chat` | 模型名称 |
 | `JWT_SECRET` | 是 | — | JWT 签名密钥 |
-| `QUANTGPT_CORS_ORIGINS` | 否 | `*` | CORS 允许源,逗号分隔 |
-| `QUANTGPT_ADMIN_PASSWORD` | 否 | — | 管理后台密码 |
-| `QUANTGPT_MAX_ACTIVE_TASKS` | 否 | `5` | 最大并发任务数 |
-| `QUANTGPT_TASK_TTL` | 否 | `3600` | 内存任务 TTL (秒) |
-| `QUANTGPT_RATE_LIMIT` | 否 | `10` | 每分钟请求限制 |
-| `QUANTGPT_MAX_PROMPT_LEN` | 否 | `500` | Prompt 最大长度 |
-| `QUANTGPT_FEEDBACK_WEBHOOK` | 否 | — | 飞书 Webhook URL |
-| `QUANTGPT_FEEDBACK_WEBHOOK_SECRET` | 否 | — | 飞书签名密钥 |
+| `WORLDQUANT_HARNESS_CORS_ORIGINS` | 否 | `*` | CORS 允许源,逗号分隔 |
+| `WORLDQUANT_HARNESS_ADMIN_PASSWORD` | 否 | — | 管理后台密码 |
+| `WORLDQUANT_HARNESS_MAX_ACTIVE_TASKS` | 否 | `5` | 最大并发任务数 |
+| `WORLDQUANT_HARNESS_TASK_TTL` | 否 | `3600` | 内存任务 TTL (秒) |
+| `WORLDQUANT_HARNESS_RATE_LIMIT` | 否 | `10` | 每分钟请求限制 |
+| `WORLDQUANT_HARNESS_MAX_PROMPT_LEN` | 否 | `500` | Prompt 最大长度 |
+| `WORLDQUANT_HARNESS_FEEDBACK_WEBHOOK` | 否 | — | 飞书 Webhook URL |
+| `WORLDQUANT_HARNESS_FEEDBACK_WEBHOOK_SECRET` | 否 | — | 飞书签名密钥 |
 
 ---
 
@@ -454,7 +454,7 @@ es.addEventListener("done", (e) => {
 });
 ```
 
-**超时:** 默认 300 秒,可通过 `QUANTGPT_SSE_TIMEOUT` 配置。
+**超时:** 默认 300 秒,可通过 `WORLDQUANT_HARNESS_SSE_TIMEOUT` 配置。
 
 ---
 
@@ -694,28 +694,41 @@ curl -H "Authorization: Bearer <token>" \
 
 ## MCP Tools
 
-QuantGPT 提供 MCP (Model Context Protocol) 服务,支持 8 个工具:
+worldquant-harness 提供 MCP (Model Context Protocol) 服务，支持 21 个工具。详细配置见 [MCP_GUIDE.md](MCP_GUIDE.md)。
 
 | Tool | 说明 |
 |------|------|
 | `list_operators` | 返回全部因子表达式算子及用法 |
 | `list_universes` | 返回可用股票池和基准列表 |
 | `validate_expression` | 验证表达式语法,返回 OK 或错误 |
+| `wq_harness_new` | 创建 no-submit harness run |
+| `wq_harness_run_presubmit` | 运行 no-submit public demo/eval wrapper |
+| `wq_harness_evaluate` | 评估已有 sandbox experiment |
+| `wq_harness_evolve` | 生成下一轮 profile/experiment candidate |
+| `wq_harness_history_ingest` | 汇总本地历史记录，默认不连平台 |
+| `wq_harness_memory_maintain` | 生成 memory maintenance 和 memory delta |
+| `wq_harness_status` | 读取 persisted harness 状态 |
 | `run_backtest` | 执行回测,返回完整指标 + 反过拟合检测 + 报告路径 |
 | `score_factor` | 执行回测并返回综合评分 (0-100, A/B/C/D) |
 | `diagnose_factor` | 诊断因子问题,推荐突变策略 (6种) |
 | `run_anti_overfit` | 独立反过拟合检测 (4项测试) |
 | `run_rolling_validation` | Walk-Forward 滚动验证 |
+| `wq_brain_submit` | 显式单因子模拟/提交路径，需凭证 |
+| `wq_brain_batch_submit` | 显式批量参数扫描路径，需凭证 |
+| `wq_brain_submit_by_ids` | 按选定 alpha ID 显式提交，需凭证 |
+| `wq_brain_list_alphas` | 查询平台 alpha，需凭证 |
+| `wq_brain_check_alphas` | check-only 检查 alpha 状态，需凭证 |
+| `wq_brain_finalize_submissions` | 最终提交确认，需凭证 |
 
 ### 配置 (.mcp.json)
 
 ```json
 {
   "mcpServers": {
-    "quantgpt": {
+    "worldquant_harness": {
       "command": "python",
-      "args": ["-m", "quantgpt"],
-      "cwd": "/path/to/quantgpt"
+      "args": ["-m", "worldquant_harness"],
+      "cwd": "/path/to/worldquant-harness"
     }
   }
 }

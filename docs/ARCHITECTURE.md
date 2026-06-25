@@ -1,6 +1,15 @@
 # Architecture
 
-QuantGPT 是 Agent-Driven 的因子研究引擎。核心架构分为六层：Agent 接口、表达式引擎、回测引擎、验证体系、数据管道、进化引擎。
+worldquant-harness 是 agent-first 的因子研究 harness。核心架构分为七层：Agent 接口、表达式引擎、回测引擎、验证体系、WQ presubmit harness、数据管道、进化引擎。
+
+![worldquant-harness overview](images/worldquant-harness-overview.svg)
+
+The public visual pack is the shortest path to the system model:
+
+- [Public demo trace](images/public-demo-trace.svg) shows the `candidate_uid` lifecycle and no-submit boundary.
+- [Memory feedback graph](images/memory-feedback-graph.svg) shows how blockers become reusable memory.
+- [Quality review dashboard](images/quality-review-dashboard.svg) shows period-level generated/submitted alpha quality.
+- [Profile evolution timeline](images/profile-evolution-timeline.svg) shows how harness metrics become next-run profile changes.
 
 ## System Overview
 
@@ -15,16 +24,16 @@ LLM Agent (Claude Code / Claude Desktop)
     │   ├── run_rolling_validation    ← Walk-forward 验证
     │   ├── validate_expression       ← 语法校验（local/wq 双模式）
     │   ├── list_operators / list_universes
-    │   ├── wq_brain_submit           ← WQ BRAIN 单因子提交
-    │   ├── wq_brain_batch_submit     ← 批量参数扫描提交
-    │   ├── wq_brain_submit_by_ids    ← 按 ID 提交
+    │   ├── wq_brain_submit           ← 显式单因子模拟/提交路径
+    │   ├── wq_brain_batch_submit     ← 显式批量参数扫描路径
+    │   ├── wq_brain_submit_by_ids    ← 按选定 ID 显式提交
     │   ├── wq_brain_list_alphas      ← 查询已提交 alpha
     │   ├── wq_brain_check_alphas     ← 检查 alpha 状态
     │   └── wq_brain_finalize_submissions ← 最终提交确认
     │
     ├── REST API                      ← 程序化访问
     │   ├── /api/v1/auto_backtest
-    │   ├── /api/v1/wq-brain/submit
+    │   ├── /api/v1/wq-brain/submit   ← 需要认证和显式调用
     │   ├── /api/v1/wq-brain/batch
     │   └── ...
     │
@@ -96,7 +105,18 @@ Rank-based 分组回测引擎。
 - Fitness = Sharpe × √(|Returns| / max(Turnover, 0.125))
 - IS test compatibility scoring
 
-## 4. Data Pipeline (`market_data.py`)
+## 4. WQ Research Harness
+
+WQ harness 将 agent 研究流从“生成候选”变成可审计的实验：
+
+- `wq_research_sandbox.py` 创建 experiment、候选文件、critic report 和 gate decision
+- `wq_agent_workflow.py presubmit-sequential` 运行候选筛选、模拟、check-only 复核、virtual active 去重和 ready/rejected 输出
+- `wq_research_harness.py` 汇总 ready rate、自相关拒绝、相似拒绝、非法输入、字段签名多样性、latency 和显式 submit 结果，计算 harness score
+- `scripts/run_public_harness_demo.py` 使用 synthetic fixture 跑完整 demo，不需要真实平台或私有凭证，也不会提交
+
+Sandbox、public demo、research miner 和 `presubmit-sequential` 都是 no-submit 路径；真实提交只能通过显式 submit 命令或显式 submit API 触发。
+
+## 5. Data Pipeline (`market_data.py`)
 
 多数据源 + Parquet 缓存。
 
@@ -119,7 +139,7 @@ Request
 - `hs300`：沪深 300（动态获取成分股）
 - `csi500`/`csi1000`/`csi2000`：中证系列
 
-## 5. Evolution Engine
+## 6. Evolution Engine
 
 ### Evolutionary Search (`iteration.py`, `mutation_engine.py`, `crossover_engine.py`)
 
@@ -139,11 +159,11 @@ Request
 
 ### WQ BRAIN Integration (`wq_brain_client.py`)
 
-- 认证 → 模拟 → IS 检查 → 提交，全流程 API
+- 认证 → 模拟 → check-only 检查 → 显式提交，全流程 API
 - Alpha Tracker：已提交 alpha 记录 + 自相关预筛
 - 批量参数扫描：region × delay × universe × neutralization 网格
 
-## 6. Database
+## 7. Database
 
 SQLAlchemy 2.0 async ORM，支持 SQLite（默认）和 PostgreSQL。
 
@@ -155,7 +175,7 @@ SQLAlchemy 2.0 async ORM，支持 SQLite（默认）和 PostgreSQL。
 - `submitted_alphas` — WQ BRAIN 已提交 alpha 记录
 - `paper_strategies` / `paper_snapshots` / `paper_orders` — 模拟盘
 
-## 7. Frontend
+## 8. Frontend
 
 React 18 + TypeScript + Vite + Tailwind CSS 4。定位为监控面板，Agent 通过 MCP 工作，Web UI 用于查看结果。
 

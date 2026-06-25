@@ -1,0 +1,19 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness factor map snapshot</title>
+<desc id="desc">Static worldquant-harness public harness visual.</desc>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#5c6670"/>
+  </marker>
+  <style>
+    text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #17202a; letter-spacing: 0; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #5c6670; }
+    .label { font-size: 15px; font-weight: 700; }
+    .body { font-size: 13px; fill: #5c6670; }
+    .tiny { font-size: 12px; fill: #5c6670; }
+    .metric { font-size: 20px; font-weight: 700; }
+  </style>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="48" y="54" class="title">Factor map snapshot</text><text x="48" y="82" class="subtitle">Field signatures and source families expose crowded areas, ready lanes, and self-correlation pressure.</text><circle cx="172" cy="180" r="47" fill="#ffffff" stroke="#c47f17" stroke-width="4"/><text x="172" y="172" text-anchor="middle" class="label">close</text><text x="172" y="197" text-anchor="middle" class="tiny">ready 0 / rejected 0</text><circle cx="472" cy="180" r="47" fill="#ffffff" stroke="#1f9d55" stroke-width="4"/><text x="472" y="172" text-anchor="middle" class="label">close|returns</text><text x="472" y="197" text-anchor="middle" class="tiny">ready 1 / rejected 0</text><circle cx="772" cy="180" r="47" fill="#ffffff" stroke="#d64545" stroke-width="4"/><text x="772" y="172" text-anchor="middle" class="label">close|volume</text><text x="772" y="197" text-anchor="middle" class="tiny">ready 0 / rejected 1</text><circle cx="172" cy="325" r="47" fill="#ffffff" stroke="#c47f17" stroke-width="4"/><text x="172" y="317" text-anchor="middle" class="label">not_a_real_field</text><text x="172" y="342" text-anchor="middle" class="tiny">ready 0 / rejected 0</text><circle cx="472" cy="325" r="47" fill="#ffffff" stroke="#d64545" stroke-width="4"/><text x="472" y="317" text-anchor="middle" class="label">volume|vwap</text><text x="472" y="342" text-anchor="middle" class="tiny">ready 0 / rejected 1</text><circle cx="780" cy="430" r="6" fill="#1f9d55"/><text x="796" y="435" class="tiny">ready lane</text><circle cx="780" cy="454" r="6" fill="#d64545"/><text x="796" y="459" class="tiny">blocked/crowded</text><circle cx="780" cy="478" r="6" fill="#c47f17"/><text x="796" y="483" class="tiny">watch</text><text x="48" y="526" class="tiny">What this proves: the harness can explain why the next alpha direction should shift fields or combine domains.</text></svg>

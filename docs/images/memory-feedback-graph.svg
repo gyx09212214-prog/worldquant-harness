@@ -1,0 +1,19 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="580" viewBox="0 0 1120 580" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness memory feedback graph</title>
+<desc id="desc">Static worldquant-harness public harness visual.</desc>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#5c6670"/>
+  </marker>
+  <style>
+    text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #17202a; letter-spacing: 0; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #5c6670; }
+    .label { font-size: 15px; font-weight: 700; }
+    .body { font-size: 13px; fill: #5c6670; }
+    .tiny { font-size: 12px; fill: #5c6670; }
+    .metric { font-size: 20px; font-weight: 700; }
+  </style>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="48" y="54" class="title">Memory feedback graph</text><text x="48" y="82" class="subtitle">Memory is shown as evidence flowing into rules and profile changes, then back into the next synthesis direction.</text><rect x="72" y="150" width="250" height="92" rx="8" fill="#f7f9fb" stroke="#d8dde3" stroke-width="2"/><text x="88" y="180" class="label">Lifecycle Events</text><text x="88" y="206" class="body">candidate_uid, ready, rejected</text><rect x="72" y="310" width="250" height="92" rx="8" fill="#f7f9fb" stroke="#d8dde3" stroke-width="2"/><text x="88" y="340" class="label">Blockers</text><text x="88" y="366" class="body">self-correlation, duplicate,</text><text x="88" y="384" class="body">illegal input</text><rect x="406" y="230" width="250" height="92" rx="8" fill="#eaf1ff" stroke="#2f6fed" stroke-width="2"/><text x="422" y="260" class="label">Memory Layer</text><text x="422" y="286" class="body">experience rows, rules,</text><text x="422" y="304" class="body">failure memory</text><rect x="720" y="150" width="250" height="92" rx="8" fill="#f7f9fb" stroke="#d8dde3" stroke-width="2"/><text x="736" y="180" class="label">Quality Review</text><text x="736" y="206" class="body">period score and pressure</text><text x="736" y="224" class="body">table</text><rect x="720" y="310" width="250" height="92" rx="8" fill="#eaf1ff" stroke="#2f6fed" stroke-width="2"/><text x="736" y="340" class="label">Profile Evolution</text><text x="736" y="366" class="body">biases, limits, repair policy</text><rect x="406" y="440" width="250" height="92" rx="8" fill="#f7f9fb" stroke="#d8dde3" stroke-width="2"/><text x="422" y="470" class="label">Next Directions</text><text x="422" y="496" class="body">self-correlation repair</text><text x="422" y="514" class="body">direction</text><line x1="322.0" y1="196.0" x2="406.0" y2="256.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><line x1="322.0" y1="356.0" x2="406.0" y2="280.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><line x1="656.0" y1="256.0" x2="720.0" y2="196.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><line x1="656.0" y1="280.0" x2="720.0" y2="356.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><line x1="845.0" y1="402.0" x2="590.0" y2="440.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><line x1="406.0" y1="486.0" x2="197.0" y2="402.0" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/><rect x="406" y="112" width="206" height="104" rx="8" fill="#f7f9fb" stroke="#d8dde3"/><text x="422" y="140" class="body">Main memory signal</text><text x="422" y="173" class="metric" fill="#c47f17">1 self-correlation block(s)</text><text x="422" y="196" class="tiny">pressure is carried into ne...</text><text x="48" y="546" class="tiny">What this proves: generated alpha quality is not lost; blockers become structured memory for the next run.</text></svg>

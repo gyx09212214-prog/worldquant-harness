@@ -6,11 +6,11 @@
 ## 两个已知算子家族
 
 ### 家族 1: ts_decay_linear（3 个 ACTIVE）
-- ACTIVE: 78aAQjoL (MARKET), 2raboRxb (MARKET), xAP0o9NJ (IND)
+- ACTIVE: 3 个已脱敏记录（MARKET 2 个，IND 1 个）
 - SC 饱和后: 换窗口 (w=5~30) SC 0.81~0.94, 换基底 (c/o, W%R, ret) SC 0.75~0.91
 
 ### 家族 2: ts_av_diff（5 个 ACTIVE）
-- ACTIVE: O0baermq (MARKET), e7dR8YpE (MARKET), e7dR8Mnl (MARKET), npZVOkMx (IND), 1YaEn36k (IND)
+- ACTIVE: 5 个已脱敏记录（MARKET 3 个，IND 2 个）
 - SC 饱和后: 换窗口/中性化 SC 0.825~0.989
 
 ## SC 差异化机制

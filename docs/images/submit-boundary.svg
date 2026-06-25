@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness submit boundary</title>
+<desc id="desc">Public-safe diagram of no-submit, check-only, and explicit submit paths.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5c6670"/>
+  </marker>
+  <style>
+    .title{font:700 28px Arial,sans-serif;fill:#17202a}
+    .subtitle{font:400 15px Arial,sans-serif;fill:#5c6670}
+    .label{font:700 16px Arial,sans-serif;fill:#17202a}
+    .body{font:400 13px Arial,sans-serif;fill:#5c6670}
+    .tiny{font:400 12px Arial,sans-serif;fill:#5c6670}
+    .pill{font:700 13px Arial,sans-serif;fill:#ffffff}
+  </style>
+</defs>
+<rect width="1120" height="560" fill="#ffffff"/>
+<text x="48" y="54" class="title">Submit boundary: safe by default, explicit by design</text>
+<text x="48" y="82" class="subtitle">The harness separates public demo, sandbox, check-only, and real submit commands so an agent cannot accidentally publish to a platform.</text>
+
+<rect x="58" y="124" width="300" height="338" rx="10" fill="#e8f6ee" stroke="#1f9d55" stroke-width="2"/>
+<rect x="82" y="150" width="110" height="28" rx="14" fill="#1f9d55"/>
+<text x="104" y="169" class="pill">NO SUBMIT</text>
+<text x="82" y="214" class="label">Public and sandbox paths</text>
+<text x="82" y="246" class="body">run_public_harness_demo.py</text>
+<text x="82" y="270" class="body">wq_research_sandbox.py</text>
+<text x="82" y="294" class="body">presubmit-sequential</text>
+<text x="82" y="318" class="body">quality review and profile evolve</text>
+<text x="82" y="368" class="label">Output</text>
+<text x="82" y="394" class="body">ready/rejected artifacts</text>
+<text x="82" y="418" class="body">memory and profile patch</text>
+
+<rect x="410" y="124" width="300" height="338" rx="10" fill="#fff4df" stroke="#c47f17" stroke-width="2"/>
+<rect x="434" y="150" width="116" height="28" rx="14" fill="#c47f17"/>
+<text x="454" y="169" class="pill">CHECK ONLY</text>
+<text x="434" y="214" class="label">Read and verify paths</text>
+<text x="434" y="246" class="body">check_alpha_submission</text>
+<text x="434" y="270" class="body">probe_alpha_detail</text>
+<text x="434" y="294" class="body">submit_wq_existing --check-only</text>
+<text x="434" y="318" class="body">status and review commands</text>
+<text x="434" y="368" class="label">Output</text>
+<text x="434" y="394" class="body">platform checks and blockers</text>
+<text x="434" y="418" class="body">no submit endpoint called</text>
+
+<rect x="762" y="124" width="300" height="338" rx="10" fill="#fdecec" stroke="#d64545" stroke-width="2"/>
+<rect x="786" y="150" width="126" height="28" rx="14" fill="#d64545"/>
+<text x="803" y="169" class="pill">REAL SUBMIT</text>
+<text x="786" y="214" class="label">Explicit commands only</text>
+<text x="786" y="246" class="body">submit --alpha-ids ...</text>
+<text x="786" y="270" class="body">run-submit --target-submissions N</text>
+<text x="786" y="294" class="body">wq_live_submit_candidates.py</text>
+<text x="786" y="318" class="body">MCP submit tools</text>
+<text x="786" y="368" class="label">Required</text>
+<text x="786" y="394" class="body">user credentials</text>
+<text x="786" y="418" class="body">human review and explicit intent</text>
+
+<line x1="358" y1="293" x2="404" y2="293" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+<line x1="710" y1="293" x2="756" y2="293" stroke="#5c6670" stroke-width="2.2" marker-end="url(#arrow)"/>
+
+<rect x="250" y="488" width="620" height="42" rx="8" fill="#f7f9fb" stroke="#d8dde3"/>
+<text x="280" y="515" class="label">Rule: ready means reviewable. Only explicit submit commands can call external submit endpoints.</text>
+</svg>
