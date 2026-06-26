@@ -1,11 +1,12 @@
 # Architecture
 
-worldquant-harness 是 agent-first 的因子研究 harness。核心架构分为七层：Agent 接口、表达式引擎、回测引擎、验证体系、WQ presubmit harness、数据管道、进化引擎。
+worldquant-harness 是 agent-first 的因子研究 harness。主架构分为四个视角：智能体入口、框架控制面、记忆与演化、显式提交边界。
 
-![worldquant-harness overview](images/worldquant-harness-overview.svg)
+![worldquant-harness architecture](images/worldquant-harness-architecture.svg)
 
 The public visual pack is the shortest path to the system model:
 
+- [System architecture](images/worldquant-harness-architecture.svg) shows the agent interface, harness control plane, memory feedback, and submit boundary.
 - [Public demo trace](images/public-demo-trace.svg) shows the `candidate_uid` lifecycle and no-submit boundary.
 - [Memory feedback graph](images/memory-feedback-graph.svg) shows how blockers become reusable memory.
 - [Quality review dashboard](images/quality-review-dashboard.svg) shows period-level generated/submitted alpha quality.

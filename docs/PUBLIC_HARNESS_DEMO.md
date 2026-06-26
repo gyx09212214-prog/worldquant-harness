@@ -63,6 +63,8 @@ public-safe explanation of the same artifact contract.
 
 Supporting boundary visuals are also included for README and release review:
 
+- `docs/images/worldquant-harness-architecture.svg`
+- `docs/images/worldquant-harness-architecture.zh-CN.svg`
 - `docs/images/submit-boundary.svg`
 - `docs/images/release-safety-boundary.svg`
 

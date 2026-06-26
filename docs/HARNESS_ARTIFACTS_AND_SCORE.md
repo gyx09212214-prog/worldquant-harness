@@ -44,6 +44,8 @@ python scripts/build_public_visual_pack.py `
 | Visual | Primary artifact inputs |
 | --- | --- |
 | `docs/images/worldquant-harness-overview.svg` | `demo_summary.json`, `eval_summary.json`, quality summary |
+| `docs/images/worldquant-harness-architecture.svg` | static public-safe map of agent entrypoints, harness gates, memory, and submit boundary |
+| `docs/images/worldquant-harness-architecture.zh-CN.svg` | Chinese static public-safe map for `README.zh-CN.md` |
 | `docs/images/harness-artifact-lifecycle.svg` | static map of `candidate_specs`, simulation, review, ready/rejected, memory/profile |
 | `docs/images/public-demo-trace.svg` | `candidate_specs.jsonl`, ready/rejected rows, `efficiency_summary.json` |
 | `docs/images/memory-feedback-graph.svg` | reject counts, quality recommended directions, evolution result |
