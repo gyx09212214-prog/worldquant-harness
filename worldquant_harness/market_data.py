@@ -447,7 +447,7 @@ class MarketDataFetcher:
         if os.path.exists(path):
             try:
                 df = pd.read_parquet(path)
-                df["trade_date"] = pd.to_datetime(df["trade_date"])
+                df["trade_date"] = pd.to_datetime(df["trade_date"]).astype("datetime64[ns]")
                 return df
             except Exception as e:
                 logger.warning(f"Cache load failed for {stock_code}: {e}")
