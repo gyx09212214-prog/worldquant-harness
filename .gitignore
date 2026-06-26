@@ -18,8 +18,10 @@ reports/
 feedback/
 .test_tmp/
 
-# Local research references; do not publish without source/license review
-references/
+# Local research references; publish only the attributed WQ catalog subset.
+references/*
+!references/wq_alpha_research/
+!references/wq_alpha_research/**
 
 # Local/private WQ research inputs and submit batches
 configs/wq_legal_inputs*.json
