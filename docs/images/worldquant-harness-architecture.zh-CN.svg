@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="720" viewBox="0 0 1180 720" role="img" aria-labelledby="title desc">
+<title id="title">worldquant-harness 系统架构</title>
+<desc id="desc">泳道架构图，展示智能体入口、框架控制面、记忆反馈和显式提交边界。</desc>
+<defs>
+  <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L10,5.5 L0,11 z" fill="#475569"/>
+  </marker>
+  <marker id="arrow-blue" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L10,5.5 L0,11 z" fill="#2563eb"/>
+  </marker>
+  <marker id="arrow-red" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L10,5.5 L0,11 z" fill="#dc2626"/>
+  </marker>
+  <style>
+    text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", Arial, sans-serif; fill: #0f172a; letter-spacing: 0; }
+    .title { font-size: 28px; font-weight: 750; }
+    .subtitle { font-size: 14px; fill: #475569; }
+    .lane-title { font-size: 16px; font-weight: 750; }
+    .lane-note { font-size: 12px; fill: #64748b; }
+    .node-title { font-size: 14px; font-weight: 750; }
+    .node-body { font-size: 12px; fill: #475569; }
+    .small { font-size: 12px; fill: #64748b; }
+    .legend { font-size: 12px; fill: #334155; }
+  </style>
+</defs>
+<rect width="1180" height="720" fill="#ffffff"/>
+
+<text x="40" y="48" class="title">worldquant-harness 系统架构</text>
+<text x="40" y="74" class="subtitle">智能体研究先进入框架控制面，再触达需要凭证的 WQ BRAIN 操作。</text>
+
+<g transform="translate(40 100)">
+  <rect x="0" y="0" width="258" height="500" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <rect x="280" y="0" width="330" height="500" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="632" y="0" width="250" height="500" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <rect x="904" y="0" width="196" height="500" rx="10" fill="#fff1f2" stroke="#fecdd3"/>
+
+  <text x="22" y="32" class="lane-title">智能体入口</text>
+  <text x="22" y="52" class="lane-note">目标、工具、批量入口</text>
+  <text x="302" y="32" class="lane-title">框架控制面</text>
+  <text x="302" y="52" class="lane-note">标识、门控、评分、复盘</text>
+  <text x="654" y="32" class="lane-title">记忆与演化</text>
+  <text x="654" y="52" class="lane-note">证据转成下一轮约束</text>
+  <text x="926" y="32" class="lane-title">提交边界</text>
+  <text x="926" y="52" class="lane-note">和公开、沙盒路径分离</text>
+
+  <g id="agent-lane">
+    <rect x="22" y="84" width="214" height="70" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.4"/>
+    <text x="40" y="112" class="node-title">人工研究目标</text>
+    <text x="40" y="134" class="node-body">目标、约束、风险边界</text>
+
+    <rect x="22" y="188" width="214" height="70" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.4"/>
+    <text x="40" y="216" class="node-title">研究智能体</text>
+    <text x="40" y="238" class="node-body">提出候选，迭代方向</text>
+
+    <rect x="22" y="292" width="214" height="90" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.4"/>
+    <text x="40" y="320" class="node-title">入口</text>
+    <text x="40" y="342" class="node-body">MCP 工具</text>
+    <text x="40" y="360" class="node-body">CLI 脚本</text>
+    <text x="40" y="378" class="node-body">REST 接口</text>
+
+    <line x1="129" y1="154" x2="129" y2="184" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+    <line x1="129" y1="258" x2="129" y2="288" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  </g>
+
+  <g id="control-lane">
+    <rect x="302" y="84" width="286" height="58" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+    <text x="320" y="110" class="node-title">候选规格</text>
+    <text x="320" y="130" class="node-body">稳定标识、来源标签、设计意图</text>
+
+    <rect x="302" y="166" width="286" height="58" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+    <text x="320" y="192" class="node-title">沙盒评估</text>
+    <text x="320" y="212" class="node-body">受保护模拟和诊断</text>
+
+    <rect x="302" y="248" width="286" height="58" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+    <text x="320" y="274" class="node-title">预提交门控</text>
+    <text x="320" y="294" class="node-body">合法性、相似度、自相关</text>
+
+    <rect x="302" y="330" width="286" height="58" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+    <text x="320" y="356" class="node-title">复盘队列</text>
+    <text x="320" y="376" class="node-body">通过和拒绝记录进入审计</text>
+
+    <rect x="302" y="412" width="286" height="58" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+    <text x="320" y="438" class="node-title">框架评分</text>
+    <text x="320" y="458" class="node-body">衡量工作流质量，不预测收益</text>
+
+    <line x1="445" y1="142" x2="445" y2="162" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="445" y1="224" x2="445" y2="244" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="445" y1="306" x2="445" y2="326" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="445" y1="388" x2="445" y2="408" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  </g>
+
+  <g id="memory-lane">
+    <rect x="654" y="84" width="206" height="58" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.4"/>
+    <text x="672" y="110" class="node-title">生命周期事件</text>
+    <text x="672" y="130" class="node-body">候选轨迹追加记录</text>
+
+    <rect x="654" y="166" width="206" height="58" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.4"/>
+    <text x="672" y="192" class="node-title">失败签名</text>
+    <text x="672" y="212" class="node-body">可复用拒绝记忆</text>
+
+    <rect x="654" y="248" width="206" height="58" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.4"/>
+    <text x="672" y="274" class="node-title">参考目录</text>
+    <text x="672" y="294" class="node-body">字段和算子上下文</text>
+
+    <rect x="654" y="330" width="206" height="58" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.4"/>
+    <text x="672" y="356" class="node-title">画像补丁</text>
+    <text x="672" y="376" class="node-body">下一轮搜索偏置和约束</text>
+  </g>
+
+  <g id="boundary-lane">
+    <rect x="926" y="84" width="152" height="70" rx="8" fill="#ffffff" stroke="#fda4af" stroke-width="1.4"/>
+    <text x="944" y="112" class="node-title">公开演示</text>
+    <text x="944" y="134" class="node-body">没有提交能力</text>
+
+    <rect x="926" y="206" width="152" height="70" rx="8" fill="#ffffff" stroke="#fda4af" stroke-width="1.4"/>
+    <text x="944" y="234" class="node-title">只检查</text>
+    <text x="944" y="256" class="node-body">提交前检查</text>
+
+    <rect x="926" y="328" width="152" height="86" rx="8" fill="#fff7ed" stroke="#dc2626" stroke-width="2"/>
+    <text x="944" y="356" class="node-title">凭证化路径</text>
+    <text x="944" y="378" class="node-body">WQ BRAIN 提交</text>
+    <text x="944" y="396" class="node-body">只由显式命令触发</text>
+
+    <line x1="1002" y1="154" x2="1002" y2="202" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+    <line x1="1002" y1="276" x2="1002" y2="324" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+  </g>
+
+  <line x1="236" y1="337" x2="298" y2="113" stroke="#2563eb" stroke-width="2.2" marker-end="url(#arrow-blue)"/>
+  <line x1="588" y1="113" x2="650" y2="113" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="588" y1="277" x2="650" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="588" y1="359" x2="922" y2="241" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+  <line x1="588" y1="441" x2="650" y2="359" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <path d="M757 388 C757 460, 166 460, 166 386" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
+  <text x="282" y="486" class="small">记忆反馈约束下一批候选生成</text>
+
+  <rect x="22" y="528" width="1056" height="74" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="44" y="557" class="node-title">产物主线</text>
+  <text x="44" y="580" class="node-body">experiment.yaml / candidate_specs.jsonl / simulation_results.jsonl / review_queue.jsonl / lifecycle_events.jsonl / eval_summary.json / profile_patch.json</text>
+</g>
+
+<g transform="translate(40 664)">
+  <line x1="0" y1="0" x2="44" y2="0" stroke="#2563eb" stroke-width="2.2" marker-end="url(#arrow-blue)"/>
+  <text x="58" y="5" class="legend">执行流</text>
+  <line x1="132" y1="0" x2="176" y2="0" stroke="#16a34a" stroke-width="2.2" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
+  <text x="190" y="5" class="legend">记忆反馈</text>
+  <line x1="302" y1="0" x2="346" y2="0" stroke="#dc2626" stroke-width="2.2" marker-end="url(#arrow-red)"/>
+  <text x="360" y="5" class="legend">真实提交路径需要显式凭证和命令</text>
+</g>
+</svg>

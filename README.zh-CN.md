@@ -54,53 +54,16 @@ worldquant-harness 把因子挖掘视为受控研究循环：
 
 ## 架构
 
-```mermaid
-flowchart LR
-    user[人工研究目标] --> agent[研究智能体]
+<p align="center">
+  <img src="docs/images/worldquant-harness-architecture.zh-CN.svg" width="960" alt="worldquant-harness 系统架构" />
+</p>
 
-    subgraph entry[入口]
-        mcp[MCP 工具]
-        cli[CLI 脚本]
-        api[REST API]
-    end
-
-    agent --> mcp
-    agent --> cli
-    agent --> api
-
-    subgraph harness[框架核心]
-        candidates[候选规格]
-        sandbox[沙盒评估]
-        gate[预提交门控]
-        review[复盘队列]
-        score[框架评分]
-    end
-
-    mcp --> candidates
-    cli --> candidates
-    api --> candidates
-    candidates --> sandbox --> gate --> review --> score
-
-    subgraph memory[研究记忆]
-        events[生命周期事件]
-        failures[失败签名]
-        catalog[参考目录]
-        profile[下一轮画像]
-    end
-
-    review --> events
-    gate --> failures
-    score --> profile
-    catalog --> candidates
-    profile --> agent
-
-    subgraph boundary[显式提交边界]
-        check[只检查]
-        submit[凭证化 WQ BRAIN 提交]
-    end
-
-    review --> check --> submit
-```
+| 层级 | 职责 |
+|:--|:--|
+| 智能体入口 | 将研究目标转成候选批次，可通过 MCP 工具、CLI 脚本、REST 接口进入 |
+| 框架控制面 | 分配稳定候选标识，运行沙盒评估，执行预提交门控，生成复盘队列 |
+| 记忆与演化 | 将生命周期事件、拒绝原因、参考上下文、框架评分转成下一轮约束 |
+| 提交边界 | 公开演示和沙盒默认不提交；真实 WQ BRAIN 提交需要凭证和显式命令 |
 
 默认公开路径不会提交。真实 WQ BRAIN 操作需要显式凭证和显式提交命令。
 
@@ -137,6 +100,7 @@ python scripts/run_public_harness_eval.py --output-root reports/public_harness_e
 | 视图 | 内容 |
 |:--|:--|
 | [概览](docs/images/worldquant-harness-overview.svg) | 人工目标 -> 智能体 -> 约束框架 -> 记忆 -> 复盘 |
+| [架构](docs/images/worldquant-harness-architecture.zh-CN.svg) | 智能体入口、框架控制面、记忆反馈、提交边界 |
 | [产物生命周期](docs/images/harness-artifact-lifecycle.svg) | 候选规格、模拟结果、复盘队列、记忆 |
 | [公开演示轨迹](docs/images/public-demo-trace.svg) | 候选在就绪和拒绝状态间流转 |
 | [记忆反馈](docs/images/memory-feedback-graph.svg) | 阻塞项如何变成下一轮约束 |

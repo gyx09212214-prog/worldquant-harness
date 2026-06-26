@@ -54,53 +54,16 @@ worldquant-harness treats factor mining as a controlled research loop:
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    user[Human research goal] --> agent[Research agent]
+<p align="center">
+  <img src="docs/images/worldquant-harness-architecture.svg" width="960" alt="worldquant-harness system architecture" />
+</p>
 
-    subgraph entry[Entrypoints]
-        mcp[MCP tools]
-        cli[CLI scripts]
-        api[REST API]
-    end
-
-    agent --> mcp
-    agent --> cli
-    agent --> api
-
-    subgraph harness[Harness core]
-        candidates[Candidate specs]
-        sandbox[Sandbox evaluation]
-        gate[Presubmit gate]
-        review[Review queue]
-        score[Harness score]
-    end
-
-    mcp --> candidates
-    cli --> candidates
-    api --> candidates
-    candidates --> sandbox --> gate --> review --> score
-
-    subgraph memory[Research memory]
-        events[Lifecycle events]
-        failures[Failure signatures]
-        catalog[Reference catalog]
-        profile[Next profile]
-    end
-
-    review --> events
-    gate --> failures
-    score --> profile
-    catalog --> candidates
-    profile --> agent
-
-    subgraph boundary[Explicit submit boundary]
-        check[Check-only inspection]
-        submit[Credentialed WQ BRAIN submit]
-    end
-
-    review --> check --> submit
-```
+| Layer | Responsibility |
+|:--|:--|
+| Agent interface | Turns a research brief into candidate batches through MCP tools, CLI scripts, or REST calls |
+| Harness control plane | Assigns stable candidate identity, runs sandbox evaluation, applies presubmit gates, and builds a review queue |
+| Memory and evolution | Converts lifecycle events, rejection reasons, reference context, and harness scores into next-run constraints |
+| Submit boundary | Keeps public demo and sandbox paths no-submit by default; real WQ BRAIN submission requires credentials and an explicit command |
 
 The default public path does not submit anything. Real WQ BRAIN actions require explicit credentials and explicit submission commands.
 
@@ -137,6 +100,7 @@ The visual pack is generated from public-safe artifacts. It is meant to explain 
 | View | What it shows |
 |:--|:--|
 | [Overview](docs/images/worldquant-harness-overview.svg) | Human goal -> agent -> harness -> memory -> review |
+| [Architecture](docs/images/worldquant-harness-architecture.svg) | Agent interface, harness control plane, memory feedback, and submit boundary |
 | [Artifact lifecycle](docs/images/harness-artifact-lifecycle.svg) | Candidate specs, simulations, review queues, and memory |
 | [Public demo trace](docs/images/public-demo-trace.svg) | Candidate movement through ready and rejected states |
 | [Memory feedback](docs/images/memory-feedback-graph.svg) | How blockers become future constraints |

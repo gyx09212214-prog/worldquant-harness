@@ -8,6 +8,12 @@ This guide is generated from public harness demo artifacts. It is designed as th
 
 What this proves: worldquant-harness is a reproducible loop around agent research, presubmit gates, memory, quality review, and profile evolution.
 
+## System Architecture
+
+![worldquant-harness architecture](images/worldquant-harness-architecture.svg)
+
+What this proves: agent entrypoints, harness gates, memory feedback, and the credentialed submit boundary are separate layers.
+
 ## Artifact Lifecycle
 
 ![Artifact lifecycle](images/harness-artifact-lifecycle.svg)
