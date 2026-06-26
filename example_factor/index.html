@@ -1,501 +1,279 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>worldquant-harness — Submitted Factors (WQ BRAIN)</title>
+<title>worldquant-harness - Strategy Display Samples</title>
 <style>
   :root {
     --bg: #0d1117;
-    --card: #161b22;
+    --panel: #161b22;
+    --panel-soft: #111820;
     --border: #30363d;
     --text: #e6edf3;
-    --text-secondary: #8b949e;
+    --muted: #8b949e;
     --accent: #58a6ff;
     --green: #3fb950;
     --gold: #d29922;
-    --blue-glow: rgba(56,139,253,0.15);
+    --cyan: #39c5cf;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  * {
+    box-sizing: border-box;
+  }
+
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
-    padding: 0;
   }
 
   .hero {
-    text-align: center;
-    padding: 60px 20px 40px;
-    background: linear-gradient(180deg, rgba(56,139,253,0.08) 0%, transparent 100%);
+    padding: 56px 20px 36px;
     border-bottom: 1px solid var(--border);
-  }
-  .hero h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-  .hero h1 span { color: var(--accent); }
-  .hero p {
-    color: var(--text-secondary);
-    font-size: 1.05rem;
-    max-width: 700px;
-    margin: 0 auto;
+    background: linear-gradient(180deg, rgba(88, 166, 255, 0.08), rgba(13, 17, 23, 0));
+    text-align: center;
   }
 
-  .stats-bar {
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    padding: 24px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
+  .hero h1 {
+    margin: 0 0 10px;
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+    letter-spacing: 0;
   }
-  .stat {
-    text-align: center;
-  }
-  .stat-value {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--green);
-  }
-  .stat-value.gold { color: var(--gold); }
-  .stat-value.blue { color: var(--accent); }
-  .stat-label {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+
+  .hero p {
+    max-width: 760px;
+    margin: 0 auto;
+    color: var(--muted);
+    font-size: 1rem;
   }
 
   .container {
-    max-width: 1100px;
+    width: min(1120px, calc(100% - 32px));
     margin: 0 auto;
-    padding: 40px 20px;
+    padding: 32px 0 48px;
   }
 
-  .factor-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 32px;
+  .hero-metrics {
+    width: 100%;
+    margin-bottom: 24px;
     overflow: hidden;
-    transition: border-color 0.2s;
-  }
-  .factor-card:hover {
-    border-color: var(--accent);
-  }
-
-  .factor-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .factor-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-  }
-  .factor-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(63,185,80,0.15);
-    color: var(--green);
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-  .factor-badge::before {
-    content: "";
-    width: 8px;
-    height: 8px;
-    background: var(--green);
-    border-radius: 50%;
-  }
-
-  .factor-expression {
-    padding: 16px 24px;
-    background: rgba(0,0,0,0.3);
-    border-bottom: 1px solid var(--border);
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-    font-size: 0.95rem;
-    color: var(--accent);
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-
-  .factor-body {
-    padding: 24px;
-  }
-
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-  .metric {
-    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 12px 16px;
+    background: var(--panel);
+  }
+
+  .hero-metrics img {
+    display: block;
+    width: 100%;
+  }
+
+  .notice {
+    margin: 0 0 24px;
+    padding: 14px 16px;
+    border: 1px solid rgba(210, 153, 34, 0.45);
+    border-radius: 8px;
+    background: rgba(210, 153, 34, 0.08);
+    color: #e8d39a;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .sample {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  .sample-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-soft);
+  }
+
+  .sample-title {
+    margin: 0;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 1.05rem;
+  }
+
+  .badge {
+    flex: 0 0 auto;
+    border: 1px solid rgba(63, 185, 80, 0.5);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--green);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .metric {
+    background: var(--panel);
+    padding: 14px 12px;
     text-align: center;
   }
-  .metric-value {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--text);
+
+  .metric strong {
+    display: block;
+    font-size: 1.05rem;
   }
-  .metric-value.pass { color: var(--green); }
-  .metric-label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+
+  .metric span {
+    display: block;
     margin-top: 2px;
+    color: var(--muted);
+    font-size: 0.75rem;
   }
 
-  .factor-desc {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-    padding: 0 4px;
-  }
-
-  .screenshots {
+  .meta {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  .screenshots img {
-    width: 100%;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: transform 0.2s, border-color 0.2s;
-  }
-  .screenshots img:hover {
-    transform: scale(1.02);
-    border-color: var(--accent);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
   }
 
-  .summary-section {
-    margin-top: 20px;
-  }
-  .summary-section h2 {
-    font-size: 1.3rem;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
+  .meta div {
+    background: var(--panel-soft);
+    padding: 12px;
+    color: var(--muted);
+    font-size: 0.85rem;
   }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
-  }
-  th {
-    text-align: left;
-    padding: 10px 12px;
-    background: rgba(0,0,0,0.3);
-    color: var(--text-secondary);
-    font-weight: 600;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    border-bottom: 1px solid var(--border);
-  }
-  td {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  tr:last-child td { border-bottom: none; }
-  td.expression {
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 0.8rem;
-    color: var(--accent);
-    max-width: 360px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  td.pass {
-    color: var(--green);
-    font-weight: 600;
+  .meta strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.92rem;
   }
 
   .footer {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
+    padding: 28px 20px 40px;
     border-top: 1px solid var(--border);
-  }
-  .footer a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-  .footer a:hover { text-decoration: underline; }
-
-  .lightbox {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.9);
-    z-index: 1000;
-    cursor: pointer;
-    align-items: center;
-    justify-content: center;
-  }
-  .lightbox.active { display: flex; }
-  .lightbox img {
-    max-width: 92%;
-    max-height: 92%;
-    border-radius: 8px;
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.85rem;
   }
 
-  @media (max-width: 640px) {
-    .hero h1 { font-size: 1.4rem; }
-    .stats-bar { gap: 20px; }
-    .stat-value { font-size: 1.4rem; }
-    .screenshots { grid-template-columns: 1fr; }
-    .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 840px) {
+    .cards {
+      grid-template-columns: 1fr;
+    }
+
+    .metrics,
+    .meta {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 </style>
 </head>
 <body>
+<header class="hero">
+  <h1>worldquant-harness strategy display samples</h1>
+  <p>Selected active WQ validation records for project presentation. Exact alpha expressions, alpha IDs beyond this approved list, and code-panel screenshots are omitted.</p>
+</header>
 
-<div class="hero">
-  <h1><span>worldquant-harness</span> — Submitted Factors</h1>
-  <p>Agent 自治因子挖矿产出，全部通过 WorldQuant BRAIN IS 检测并正式提交</p>
-</div>
+<main class="container">
+  <section class="hero-metrics" aria-label="Sanitized alpha metric graphic">
+    <img src="../docs/images/strategy-display-alpha-set.svg" alt="Sanitized strategy display alpha set">
+  </section>
 
-<div class="stats-bar">
-  <div class="stat">
-    <div class="stat-value">3</div>
-    <div class="stat-label">Submitted Factors</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value gold">1.26</div>
-    <div class="stat-label">Best Fitness</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value blue">1.77</div>
-    <div class="stat-label">Best Sharpe</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">24.15%</div>
-    <div class="stat-label">Best Returns</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value pass">21/21</div>
-    <div class="stat-label">IS Tests Passed</div>
-  </div>
-</div>
+  <p class="notice">These records are historical validation evidence only. They are not required for the public demo and do not constitute investment advice.</p>
 
-<div class="container">
-
-  <!-- Factor 1 -->
-  <div class="factor-card">
-    <div class="factor-header">
-      <div class="factor-title">Factor 1: Debt-Momentum Composite</div>
-      <div class="factor-badge">Submitted</div>
-    </div>
-    <div class="factor-expression">-1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)</div>
-    <div class="factor-body">
-      <div class="metrics-grid">
-        <div class="metric">
-          <div class="metric-value">1.77</div>
-          <div class="metric-label">Sharpe</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value pass">1.26</div>
-          <div class="metric-label">Fitness</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">39.93%</div>
-          <div class="metric-label">Turnover</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">20.18%</div>
-          <div class="metric-label">Returns</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">11.29%</div>
-          <div class="metric-label">Drawdown</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">Industry</div>
-          <div class="metric-label">Neutralization</div>
-        </div>
+  <section class="cards" aria-label="Selected alpha metrics">
+    <article class="sample">
+      <div class="sample-header">
+        <h2 class="sample-title" style="color: var(--accent)">3qz93wP6</h2>
+        <span class="badge">ACTIVE</span>
       </div>
-      <div class="factor-desc">结合动量反转信号（ts_av_diff）与基本面价值信号（debt/enterprise_value），行业中性化。Fitness 1.26 为三个因子中最高。</div>
-      <div class="screenshots">
-        <img src="1-1.png" alt="WQ BRAIN PnL — Debt-Momentum Composite" onclick="openLightbox(this)">
-        <img src="1-2.png" alt="WQ BRAIN IS Summary — Debt-Momentum Composite" onclick="openLightbox(this)">
+      <div class="metrics">
+        <div class="metric"><strong>2.38</strong><span>Sharpe</span></div>
+        <div class="metric"><strong>1.60</strong><span>Fitness</span></div>
+        <div class="metric"><strong>18.94%</strong><span>Returns</span></div>
+        <div class="metric"><strong>41.79%</strong><span>Turnover</span></div>
       </div>
-    </div>
-  </div>
-
-  <!-- Factor 2 -->
-  <div class="factor-card">
-    <div class="factor-header">
-      <div class="factor-title">Factor 2: VWAP 衰减反转</div>
-      <div class="factor-badge">Submitted</div>
-    </div>
-    <div class="factor-expression">-1 * rank(ts_decay_linear(close / vwap, 10))</div>
-    <div class="factor-body">
-      <div class="metrics-grid">
-        <div class="metric">
-          <div class="metric-value">1.69</div>
-          <div class="metric-label">Sharpe</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value pass">1.07</div>
-          <div class="metric-label">Fitness</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">46.14%</div>
-          <div class="metric-label">Turnover</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">18.63%</div>
-          <div class="metric-label">Returns</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">13.13%</div>
-          <div class="metric-label">Drawdown</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">Market</div>
-          <div class="metric-label">Neutralization</div>
-        </div>
+      <div class="meta">
+        <div><strong>6.49%</strong>Drawdown</div>
+        <div><strong>MARKET</strong>Neutralization</div>
+        <div><strong>OS</strong>Stage</div>
       </div>
-      <div class="factor-desc">捕捉价格偏离 VWAP 的衰减回归信号，市场中性化。</div>
-      <div class="screenshots">
-        <img src="2-1.png" alt="WQ BRAIN PnL — VWAP Decay Reversal" onclick="openLightbox(this)">
-        <img src="2-2.png" alt="WQ BRAIN IS Summary — VWAP Decay Reversal" onclick="openLightbox(this)">
+    </article>
+
+    <article class="sample">
+      <div class="sample-header">
+        <h2 class="sample-title" style="color: var(--green)">3q7Rew3e</h2>
+        <span class="badge">ACTIVE</span>
       </div>
-    </div>
-  </div>
-
-  <!-- Factor 3 -->
-  <div class="factor-card">
-    <div class="factor-header">
-      <div class="factor-title">Factor 3: Returns-Volume Momentum</div>
-      <div class="factor-badge">Submitted</div>
-    </div>
-    <div class="factor-expression">-1 * rank(ts_decay_linear(returns * volume / adv20, 5))</div>
-    <div class="factor-body">
-      <div class="metrics-grid">
-        <div class="metric">
-          <div class="metric-value">1.60</div>
-          <div class="metric-label">Sharpe</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value pass">1.03</div>
-          <div class="metric-label">Fitness</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">57.87%</div>
-          <div class="metric-label">Turnover</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">24.15%</div>
-          <div class="metric-label">Returns</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">11.79%</div>
-          <div class="metric-label">Drawdown</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">Market</div>
-          <div class="metric-label">Neutralization</div>
-        </div>
+      <div class="metrics">
+        <div class="metric"><strong>2.08</strong><span>Sharpe</span></div>
+        <div class="metric"><strong>1.68</strong><span>Fitness</span></div>
+        <div class="metric"><strong>10.32%</strong><span>Returns</span></div>
+        <div class="metric"><strong>15.87%</strong><span>Turnover</span></div>
       </div>
-      <div class="factor-desc">捕捉收益率与相对成交量（volume/adv20）的衰减加权动量信号。Returns 24.15% 为三个因子中最高。</div>
-      <div class="screenshots">
-        <img src="3-1.png" alt="WQ BRAIN PnL — Returns-Volume Momentum" onclick="openLightbox(this)">
-        <img src="3-2.png" alt="WQ BRAIN IS Summary — Returns-Volume Momentum" onclick="openLightbox(this)">
+      <div class="meta">
+        <div><strong>4.47%</strong>Drawdown</div>
+        <div><strong>SUBINDUSTRY</strong>Neutralization</div>
+        <div><strong>OS</strong>Stage</div>
       </div>
-    </div>
-  </div>
+    </article>
 
-  <!-- Summary -->
-  <div class="summary-section">
-    <h2>Summary</h2>
-    <div class="factor-card" style="margin-bottom:0">
-      <div style="overflow-x:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Factor</th>
-              <th>Expression</th>
-              <th>Sharpe</th>
-              <th>Fitness</th>
-              <th>Returns</th>
-              <th>IS</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Debt-Momentum Composite</td>
-              <td class="expression">-1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)</td>
-              <td>1.77</td>
-              <td>1.26</td>
-              <td>20.18%</td>
-              <td class="pass">7/7</td>
-              <td class="pass">Submitted</td>
-            </tr>
-            <tr>
-              <td>VWAP 衰减反转</td>
-              <td class="expression">-1 * rank(ts_decay_linear(close / vwap, 10))</td>
-              <td>1.69</td>
-              <td>1.07</td>
-              <td>18.63%</td>
-              <td class="pass">7/7</td>
-              <td class="pass">Submitted</td>
-            </tr>
-            <tr>
-              <td>Returns-Volume Momentum</td>
-              <td class="expression">-1 * rank(ts_decay_linear(returns * volume / adv20, 5))</td>
-              <td>1.60</td>
-              <td>1.03</td>
-              <td>24.15%</td>
-              <td class="pass">7/7</td>
-              <td class="pass">Submitted</td>
-            </tr>
-          </tbody>
-        </table>
+    <article class="sample">
+      <div class="sample-header">
+        <h2 class="sample-title" style="color: var(--gold)">YPN9QR0M</h2>
+        <span class="badge">ACTIVE</span>
       </div>
-    </div>
-  </div>
+      <div class="metrics">
+        <div class="metric"><strong>2.06</strong><span>Sharpe</span></div>
+        <div class="metric"><strong>1.72</strong><span>Fitness</span></div>
+        <div class="metric"><strong>8.70%</strong><span>Returns</span></div>
+        <div class="metric"><strong>10.93%</strong><span>Turnover</span></div>
+      </div>
+      <div class="meta">
+        <div><strong>3.36%</strong>Drawdown</div>
+        <div><strong>SUBINDUSTRY</strong>Neutralization</div>
+        <div><strong>OS</strong>Stage</div>
+      </div>
+    </article>
 
-</div>
+    <article class="sample">
+      <div class="sample-header">
+        <h2 class="sample-title" style="color: var(--cyan)">akd1QGp1</h2>
+        <span class="badge">ACTIVE</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><strong>1.81</strong><span>Sharpe</span></div>
+        <div class="metric"><strong>1.78</strong><span>Fitness</span></div>
+        <div class="metric"><strong>12.08%</strong><span>Returns</span></div>
+        <div class="metric"><strong>11.87%</strong><span>Turnover</span></div>
+      </div>
+      <div class="meta">
+        <div><strong>5.93%</strong>Drawdown</div>
+        <div><strong>INDUSTRY</strong>Neutralization</div>
+        <div><strong>ACTIVE</strong>Stage</div>
+      </div>
+    </article>
+  </section>
+</main>
 
-<div class="footer">
-  Generated by <a href="https://github.com/Miasyster/worldquant-harness" target="_blank">worldquant-harness</a> — Agent-Driven LLM Quant Research Engine
-</div>
-
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-  <img id="lightbox-img" src="" alt="">
-</div>
-
-<script>
-function openLightbox(el) {
-  const lb = document.getElementById('lightbox');
-  document.getElementById('lightbox-img').src = el.src;
-  lb.classList.add('active');
-}
-function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('active');
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-</script>
-
+<footer class="footer">
+  Generated for worldquant-harness. Public examples show approved IDs and metrics only; expressions are intentionally omitted.
+</footer>
 </body>
 </html>

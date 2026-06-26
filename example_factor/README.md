@@ -1,85 +1,22 @@
-# worldquant-harness — Submitted Factors (WQ BRAIN)
+# worldquant-harness - Sanitized Strategy Display Samples
 
-Agent-driven factor research engine. Factors below were discovered, optimized, and submitted to WorldQuant BRAIN through worldquant-harness's autonomous research loop. All passed IS tests.
+This folder keeps sanitized historical validation material for the open-source project introduction.
 
----
+The exact alpha expressions are intentionally omitted. Use these records only as sanitized evidence that a harness-controlled research loop can produce candidates with platform summary metrics. They are not needed for the public demo and are not investment advice.
 
-## Factor 1: Debt-Momentum Composite — **已正式提交 BRAIN**
+## Strategy Display Alpha Set
 
-```
--1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)
-```
+![Sanitized strategy display alpha metrics](../docs/images/strategy-display-alpha-set.svg)
 
-| Item | Value |
-|------|-------|
-| Sharpe | **1.77** |
-| Fitness | **1.26** (≥ 1.0 PASS) |
-| Turnover | 39.93% |
-| Returns | 20.18% |
-| Drawdown | 11.29% |
-| Neutralization | Industry |
-| IS Tests | **全部通过** |
-| Status | **Submitted** |
+| Alpha ID | Status | WQ Sharpe | WQ Fitness | Returns | Turnover | Drawdown | Neutralization |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| `3qz93wP6` | ACTIVE | **2.38** | 1.60 | **18.94%** | 41.79% | 6.49% | MARKET |
+| `3q7Rew3e` | ACTIVE | 2.08 | 1.68 | 10.32% | 15.87% | 4.47% | SUBINDUSTRY |
+| `YPN9QR0M` | ACTIVE | 2.06 | 1.72 | 8.70% | 10.93% | 3.36% | SUBINDUSTRY |
+| `akd1QGp1` | ACTIVE | 1.81 | **1.78** | 12.08% | 11.87% | 5.93% | INDUSTRY |
 
-结合动量反转信号（ts_av_diff）与基本面价值信号（debt/enterprise_value），行业中性化。Fitness 1.26 为目前最高。
+## Review Boundary
 
-![WQ BRAIN PnL — Debt-Momentum Composite](1-1.png)
-![WQ BRAIN IS Summary — Debt-Momentum Composite](1-2.png)
-
----
-
-## Factor 2: VWAP 衰减反转 — **已正式提交 BRAIN**
-
-```
--1 * rank(ts_decay_linear(close / vwap, 10))
-```
-
-| Item | Value |
-|------|-------|
-| Sharpe | **1.69** |
-| Fitness | **1.07** (≥ 1.0 PASS) |
-| Turnover | 46.14% |
-| Returns | 18.63% |
-| Drawdown | 13.13% |
-| Neutralization | Market |
-| IS Tests | **全部通过** |
-| Status | **Submitted** |
-
-![WQ BRAIN PnL — VWAP Decay Reversal](2-1.png)
-![WQ BRAIN IS Summary — VWAP Decay Reversal](2-2.png)
-
----
-
-## Factor 3: Returns-Volume Momentum — **已正式提交 BRAIN**
-
-```
--1 * rank(ts_decay_linear(returns * volume / adv20, 5))
-```
-
-| Item | Value |
-|------|-------|
-| Sharpe | **1.60** |
-| Fitness | **1.03** (≥ 1.0 PASS) |
-| Turnover | 57.87% |
-| Returns | 24.15% |
-| Drawdown | 11.79% |
-| Neutralization | Market |
-| IS Tests | **全部通过** |
-| Status | **Submitted** |
-
-捕捉收益率与相对成交量（volume/adv20）的衰减加权动量信号。Returns 24.15% 为三个因子中最高。
-
-![WQ BRAIN PnL — Returns-Volume Momentum](3-1.png)
-![WQ BRAIN IS Summary — Returns-Volume Momentum](3-2.png)
-
----
-
-## Summary
-
-| Factor | Expression | WQ Sharpe | WQ Fitness | Returns | IS PASS | Status |
-|--------|-----------|-----------|-----------|---------|---------|--------|
-| Debt-Momentum Composite | `-1 * rank(ts_av_diff(close, 10)) + rank(debt / enterprise_value)` | 1.77 | 1.26 | 20.18% | 7/7 | **Submitted** |
-| VWAP 衰减反转 | `-1 * rank(ts_decay_linear(close / vwap, 10))` | 1.69 | 1.07 | 18.63% | 7/7 | **Submitted** |
-| Returns-Volume Momentum | `-1 * rank(ts_decay_linear(returns * volume / adv20, 5))` | 1.60 | 1.03 | 24.15% | 7/7 | **Submitted** |
-
-![Dashboard](dashboard.png)
+- Do not use screenshots with platform code panels, expression tables, or legacy branding in public-facing docs.
+- Do not add factor names, exact expressions, account identifiers, or raw platform exports here.
+- Keep public screenshots limited to summary metrics or dashboard views that have been reviewed for expression leakage.
