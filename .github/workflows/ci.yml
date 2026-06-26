@@ -39,23 +39,55 @@ jobs:
         run: pytest tests/ -x -q --cov=worldquant_harness --cov-report=term-missing --cov-fail-under=33
 
       - name: Dependency audit
-        run: pip-audit --strict --desc -f json 2>/dev/null | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          vulns = data.get('dependencies', [])
-          own_pkgs = {'worldquant-harness','worldquant_harness','pandas','numpy','scipy','baostock','quantstats',
-                      'mcp','uvicorn','fastapi','openai','sqlalchemy','aiosqlite',
-                      'alembic','pyjwt','bcrypt','aiosmtplib','httpx','akshare',
-                      'apscheduler','starlette','python-multipart'}
-          critical = [v for v in vulns if v.get('name','').lower() in own_pkgs and v.get('vulns')]
+        run: |
+          pip-audit --strict --desc -f json > pip-audit.json 2>/dev/null || true
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = Path("pip-audit.json").read_text().strip()
+          data = json.loads(payload) if payload else {"dependencies": []}
+          vulns = data.get("dependencies", [])
+          own_pkgs = {
+              "worldquant-harness",
+              "worldquant_harness",
+              "pandas",
+              "numpy",
+              "scipy",
+              "baostock",
+              "quantstats",
+              "mcp",
+              "uvicorn",
+              "fastapi",
+              "openai",
+              "sqlalchemy",
+              "aiosqlite",
+              "alembic",
+              "pyjwt",
+              "bcrypt",
+              "aiosmtplib",
+              "httpx",
+              "akshare",
+              "apscheduler",
+              "starlette",
+              "python-multipart",
+          }
+          critical = [
+              v for v in vulns
+              if v.get("name", "").lower() in own_pkgs and v.get("vulns")
+          ]
           if critical:
-              for c in critical:
-                  for vuln in c['vulns']:
-                      print(f\"::warning ::{c['name']} {c['version']}: {vuln['id']} (fix: {vuln.get('fix_versions',['?'])})\")
-              print(f'{len(critical)} direct-dependency vulnerabilities found')
+              for package in critical:
+                  for vuln in package["vulns"]:
+                      print(
+                          "::warning ::"
+                          f"{package['name']} {package['version']}: {vuln['id']} "
+                          f"(fix: {vuln.get('fix_versions', ['?'])})"
+                      )
+              print(f"{len(critical)} direct-dependency vulnerabilities found")
           else:
-              print('No direct-dependency vulnerabilities')
-          "
+              print("No direct-dependency vulnerabilities")
+          PY
 
   frontend:
     runs-on: ubuntu-latest
