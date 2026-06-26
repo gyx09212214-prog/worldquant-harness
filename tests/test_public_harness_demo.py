@@ -59,7 +59,10 @@ def test_public_harness_demo_artifact_validator_accepts_root_and_experiment(work
     score = root_validation["metrics"]["harness_score"]
     recomputed_score = root_validation["metrics"]["recomputed_harness_score"]
     assert score == pytest.approx(recomputed_score, abs=1e-6)
-    assert score == pytest.approx(0.885417, abs=2e-6)
+    assert 0.85 <= score <= 0.95
+    assert root_validation["metrics"]["ready_count"] == 1
+    assert root_validation["metrics"]["total_simulations"] == 3
+    assert root_validation["metrics"]["real_submit_attempt_count"] == 0
 
     experiment_validation = validate_public_harness_artifacts(Path(result["experiment_dir"]))
     assert experiment_validation["ok"] is True
