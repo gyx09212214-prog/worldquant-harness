@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">worldquant-harness strategy display alpha set</title>
+  <desc id="desc">Sanitized metric cards for selected alpha IDs. Expressions are intentionally omitted.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .panel { fill: #161b22; stroke: #30363d; stroke-width: 1.5; }
+      .panel-top { fill: #111820; }
+      .title { fill: #f0f6fc; font: 700 30px Inter, Segoe UI, Arial, sans-serif; }
+      .subtitle { fill: #8b949e; font: 400 16px Inter, Segoe UI, Arial, sans-serif; }
+      .label { fill: #8b949e; font: 700 12px Inter, Segoe UI, Arial, sans-serif; letter-spacing: .08em; }
+      .id { fill: #f0f6fc; font: 700 22px Consolas, Menlo, monospace; }
+      .metric { fill: #f0f6fc; font: 700 24px Inter, Segoe UI, Arial, sans-serif; }
+      .metric-small { fill: #c9d1d9; font: 700 18px Inter, Segoe UI, Arial, sans-serif; }
+      .note { fill: #8b949e; font: 400 13px Inter, Segoe UI, Arial, sans-serif; }
+      .accent-blue { fill: #58a6ff; }
+      .accent-green { fill: #3fb950; }
+      .accent-gold { fill: #d29922; }
+      .accent-cyan { fill: #39c5cf; }
+      .badge { fill: #102d1b; stroke: #238636; stroke-width: 1; }
+      .badge-text { fill: #3fb950; font: 700 12px Inter, Segoe UI, Arial, sans-serif; }
+      .divider { stroke: #30363d; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1120" height="560" rx="18"/>
+
+  <text class="title" x="48" y="62">Strategy display alpha set</text>
+  <text class="subtitle" x="48" y="91">Selected active WQ validation records. Exact expressions and code-panel screenshots are omitted.</text>
+  <rect x="864" y="44" width="208" height="36" rx="18" class="badge"/>
+  <text class="badge-text" x="904" y="67">PUBLIC-SAFE METRICS</text>
+
+  <g transform="translate(48 128)">
+    <rect class="panel" width="492" height="162" rx="10"/>
+    <rect class="panel-top" width="492" height="50" rx="10"/>
+    <text class="label" x="24" y="31">ALPHA ID</text>
+    <text class="id accent-blue" x="118" y="33">3qz93wP6</text>
+    <line class="divider" x1="24" y1="76" x2="468" y2="76"/>
+    <text class="label" x="24" y="104">SHARPE</text>
+    <text class="metric" x="24" y="134">2.38</text>
+    <text class="label" x="132" y="104">FITNESS</text>
+    <text class="metric" x="132" y="134">1.60</text>
+    <text class="label" x="242" y="104">RETURNS</text>
+    <text class="metric-small" x="242" y="132">18.94%</text>
+    <text class="label" x="352" y="104">TURNOVER</text>
+    <text class="metric-small" x="352" y="132">41.79%</text>
+    <text class="note" x="24" y="154">ACTIVE, MARKET neutralization, drawdown 6.49%</text>
+  </g>
+
+  <g transform="translate(580 128)">
+    <rect class="panel" width="492" height="162" rx="10"/>
+    <rect class="panel-top" width="492" height="50" rx="10"/>
+    <text class="label" x="24" y="31">ALPHA ID</text>
+    <text class="id accent-green" x="118" y="33">3q7Rew3e</text>
+    <line class="divider" x1="24" y1="76" x2="468" y2="76"/>
+    <text class="label" x="24" y="104">SHARPE</text>
+    <text class="metric" x="24" y="134">2.08</text>
+    <text class="label" x="132" y="104">FITNESS</text>
+    <text class="metric" x="132" y="134">1.68</text>
+    <text class="label" x="242" y="104">RETURNS</text>
+    <text class="metric-small" x="242" y="132">10.32%</text>
+    <text class="label" x="352" y="104">TURNOVER</text>
+    <text class="metric-small" x="352" y="132">15.87%</text>
+    <text class="note" x="24" y="154">ACTIVE, SUBINDUSTRY neutralization, drawdown 4.47%</text>
+  </g>
+
+  <g transform="translate(48 324)">
+    <rect class="panel" width="492" height="162" rx="10"/>
+    <rect class="panel-top" width="492" height="50" rx="10"/>
+    <text class="label" x="24" y="31">ALPHA ID</text>
+    <text class="id accent-gold" x="118" y="33">YPN9QR0M</text>
+    <line class="divider" x1="24" y1="76" x2="468" y2="76"/>
+    <text class="label" x="24" y="104">SHARPE</text>
+    <text class="metric" x="24" y="134">2.06</text>
+    <text class="label" x="132" y="104">FITNESS</text>
+    <text class="metric" x="132" y="134">1.72</text>
+    <text class="label" x="242" y="104">RETURNS</text>
+    <text class="metric-small" x="242" y="132">8.70%</text>
+    <text class="label" x="352" y="104">TURNOVER</text>
+    <text class="metric-small" x="352" y="132">10.93%</text>
+    <text class="note" x="24" y="154">ACTIVE, SUBINDUSTRY neutralization, drawdown 3.36%</text>
+  </g>
+
+  <g transform="translate(580 324)">
+    <rect class="panel" width="492" height="162" rx="10"/>
+    <rect class="panel-top" width="492" height="50" rx="10"/>
+    <text class="label" x="24" y="31">ALPHA ID</text>
+    <text class="id accent-cyan" x="118" y="33">akd1QGp1</text>
+    <line class="divider" x1="24" y1="76" x2="468" y2="76"/>
+    <text class="label" x="24" y="104">SHARPE</text>
+    <text class="metric" x="24" y="134">1.81</text>
+    <text class="label" x="132" y="104">FITNESS</text>
+    <text class="metric" x="132" y="134">1.78</text>
+    <text class="label" x="242" y="104">RETURNS</text>
+    <text class="metric-small" x="242" y="132">12.08%</text>
+    <text class="label" x="352" y="104">TURNOVER</text>
+    <text class="metric-small" x="352" y="132">11.87%</text>
+    <text class="note" x="24" y="154">ACTIVE, INDUSTRY neutralization, drawdown 5.93%</text>
+  </g>
+
+  <text class="note" x="48" y="526">Source: local historical WQ validation records. Metrics are shown for project presentation only; expressions are intentionally not published.</text>
+</svg>
