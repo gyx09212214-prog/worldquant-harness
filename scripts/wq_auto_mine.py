@@ -27,7 +27,7 @@ def main() -> int:
     parser.add_argument("--fields-file", default="")
     parser.add_argument("--community-context-dir", default="")
     parser.add_argument("--community-context-mode", choices=["auto", "off"], default="auto")
-    parser.add_argument("--community-seed-limit", type=int, default=12)
+    parser.add_argument("--community-seed-limit", type=int, default=0)
     parser.add_argument("--region", default="USA")
     parser.add_argument("--universe", default="TOP3000")
     parser.add_argument("--delay", type=int, default=1)

@@ -256,6 +256,15 @@ def triage_item(item: CommunityItem, max_candidates_per_record: int = 5) -> dict
     )
     score = relevance_score(text_lower, fields, operators, windows, risk_flags, expression_snippets, candidate_expressions)
     value_type = classify_value_type(score, fields, operators, risk_flags, candidate_expressions, text_lower)
+    experience_category = classify_experience_category(
+        value_type=value_type,
+        text_lower=text_lower,
+        fields=fields,
+        operators=operators,
+        risk_flags=risk_flags,
+        candidate_expressions=candidate_expressions,
+        expression_snippets=expression_snippets,
+    )
 
     return {
         "post_id": item.post_id,
@@ -266,6 +275,7 @@ def triage_item(item: CommunityItem, max_candidates_per_record: int = 5) -> dict
         "excerpt": make_excerpt(item.text or item.title),
         "relevance_score": score,
         "value_type": value_type,
+        "experience_category": experience_category,
         "hypothesis": infer_hypothesis(text_lower, fields, operators, risk_flags),
         "wq_fields": sorted(fields),
         "operators": sorted(operators),
@@ -308,6 +318,7 @@ def triage_community(config: CommunityTriageConfig) -> dict:
         "input_comments": len(comments),
         "triage_records": len(kept),
         "candidate_rows": len(candidates),
+        "experience_categories": _count_by_key(kept, "experience_category"),
         "privacy_note": "No credentials are read or written; suspected complete formulas are not emitted verbatim as candidates.",
         "files": {
             "records": str(records_file),
@@ -367,10 +378,19 @@ def infer_risk_flags(text_lower: str, expression_snippets: list[str]) -> list[st
         flags.append("possible_complete_alpha")
     if any(token in text_lower for token in ("actual code", "full code", "完整代码", "完整alpha", "完整 alpha")):
         flags.append("private_code")
-    if any(token in text_lower for token in ("self correlation", "prod correlation", "sc fail", "self_corr", "prod_corr")):
+    if any(token in text_lower for token in ("template", "模板", "copy", "clone", "directly use", "照抄", "套用")):
+        flags.append("template_clone_risk")
+    if any(token in text_lower for token in ("near pass", "almost pass", "close to pass", "接近过线", "差一点", "快过线")):
+        flags.append("metric_near_pass")
+    if any(token in text_lower for token in ("precheck", "pre-check", "stale", "expired", "rerun check", "重新check", "重新 check")):
+        flags.append("stale_precheck_risk")
+    if any(token in text_lower for token in ("self correlation", "prod correlation", "sc fail", "self_corr", "prod_corr", "相关性不过", "自相关")):
         flags.append("correlation_risk")
+    if any(token in text_lower for token in ("crowded", "popular field", "same field", "common field", "拥挤", "热门字段", "同质")):
+        flags.append("field_family_crowding")
     if any(token in text_lower for token in ("unknown field", "unknown operator", "unsupported", "not available")):
         flags.append("unknown_or_unsupported")
+        flags.append("operator_availability_risk")
     if "unit check" in text_lower or "unit" in text_lower and "fail" in text_lower:
         flags.append("unit_check")
     if "turnover" in text_lower and any(token in text_lower for token in ("high", "too high", ">70", "above")):
@@ -379,6 +399,7 @@ def infer_risk_flags(text_lower: str, expression_snippets: list[str]) -> list[st
         flags.append("low_turnover")
     if any(token in text_lower for token in ("tier", "gold", "free tier", "unavailable", "pasteurize")):
         flags.append("platform_limit")
+        flags.append("operator_availability_risk")
     return sorted(set(flags))
 
 
@@ -517,9 +538,52 @@ def classify_value_type(
     return "discard"
 
 
+def classify_experience_category(
+    *,
+    value_type: str,
+    text_lower: str,
+    fields: set[str],
+    operators: set[str],
+    risk_flags: list[str],
+    candidate_expressions: list[str],
+    expression_snippets: list[str],
+) -> str:
+    risk_set = set(risk_flags)
+    if "metric_near_pass" in risk_set or (
+        "correlation_risk" in risk_set and any(token in text_lower for token in ("near", "close", "almost", "接近", "差一点"))
+    ):
+        return "near_pass_repair"
+    if "template_clone_risk" in risk_set or (
+        expression_snippets and any(token in text_lower for token in ("template", "模板", "example", "例子"))
+    ):
+        return "alpha_template"
+    if risk_set & {
+        "high_turnover",
+        "low_turnover",
+        "unit_check",
+        "platform_limit",
+        "unknown_or_unsupported",
+        "operator_availability_risk",
+    }:
+        return "operation_attribution"
+    if risk_set & {"correlation_risk", "stale_precheck_risk", "field_family_crowding"}:
+        return "submission_gate"
+    if value_type == "candidate_seed" or candidate_expressions:
+        return "alpha_template"
+    if value_type in {"submission_rule", "failure_case"}:
+        return "submission_gate"
+    if fields or operators:
+        return "operation_attribution"
+    return value_type or "discard"
+
+
 def infer_hypothesis(text_lower: str, fields: set[str], operators: set[str], risk_flags: list[str]) -> str:
+    if "metric_near_pass" in risk_flags:
+        return "Near-pass candidates should be repaired before spending fresh simulation budget."
     if "correlation_risk" in risk_flags:
         return "Submission constraint: correlation checks require changing field or operator family, not only windows."
+    if "template_clone_risk" in risk_flags:
+        return "Template-like forum examples should be transformed structurally before simulation or submission."
     if "platform_limit" in risk_flags or "unknown_or_unsupported" in risk_flags:
         return "Platform constraint: verify operator and field availability before expanding this direction."
     if "vwap" in fields and any(token in text_lower for token in ("reversal", "mean reversion", "deviation")):
@@ -554,6 +618,8 @@ def build_candidate_rows(records: list[dict]) -> list[dict]:
                 "source_post_id": record.get("post_id"),
                 "source_comment_id": record.get("comment_id"),
                 "relevance_score": record.get("relevance_score"),
+                "experience_category": record.get("experience_category"),
+                "risk_flags": record.get("risk_flags") or [],
             })
     return rows
 
@@ -565,6 +631,10 @@ def render_report(records: list[dict], candidates: list[dict]) -> str:
         f"- Records kept: {len(records)}",
         f"- Candidate expressions: {len(candidates)}",
         "- Note: candidate expressions are derived templates, not verbatim copies of suspected complete alphas.",
+        "",
+        "## Experience Categories",
+        "",
+        *[f"- {key}: {value}" for key, value in sorted(_count_by_key(records, "experience_category").items())],
         "",
     ]
 
@@ -591,6 +661,8 @@ def render_report(records: list[dict], candidates: list[dict]) -> str:
                 sections.append("  Operators: " + ", ".join(record["operators"]))
             if record.get("risk_flags"):
                 sections.append("  Risk flags: " + ", ".join(record["risk_flags"]))
+            if record.get("experience_category"):
+                sections.append(f"  Experience category: {record['experience_category']}")
             for expression in record.get("candidate_expressions", [])[:5]:
                 sections.append(f"  Candidate: `{expression}`")
             if record.get("excerpt"):
@@ -621,6 +693,8 @@ def render_knowledge_file(title: str, records: list[dict]) -> str:
     for record in records[:100]:
         lines.append(f"- {record.get('hypothesis')}")
         lines.append(f"  Source: {record.get('post_id')}" + (f" / {record.get('comment_id')}" if record.get("comment_id") else ""))
+        if record.get("experience_category"):
+            lines.append(f"  Experience category: {record.get('experience_category')}")
         if record.get("risk_flags"):
             lines.append("  Risk flags: " + ", ".join(record["risk_flags"]))
         if record.get("candidate_expressions"):
@@ -633,6 +707,14 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
     with path.open("w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+
+
+def _count_by_key(rows: list[dict], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = str(row.get(key) or "unknown")
+        counts[value] = counts.get(value, 0) + 1
+    return counts
 
 
 def make_excerpt(text: str, limit: int = 260) -> str:

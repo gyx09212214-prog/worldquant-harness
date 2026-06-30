@@ -264,7 +264,7 @@ external model/API dependencies.
    newest local `<local_tmp>/worldquant_community*` cache and records the reason in
    `daily_refresh_manifest.json`.
 
-4. Build reusable forum idea memory from the triage output:
+4. Build reusable forum idea memory and community skill memory from the triage output:
 
    ```powershell
    python scripts/build_wq_forum_idea_memory.py `
@@ -272,16 +272,36 @@ external model/API dependencies.
      --output-dir reports\wq_forum_research_<date>\idea_memory `
      --source-label daily `
      --top-sources 6
+
+   python scripts/build_wq_community_skill_memory.py `
+     --triage-dir <local_tmp>\worldquant_community_daily_<date>\triage `
+     --forum-memory-dirs reports\wq_forum_research_<date>\idea_memory `
+     --output-dir <local_tmp>\worldquant_community_daily_<date>\skill_memory `
+     --source-label daily
    ```
 
    For a wider historical sample, increase `--max-pages` and `--max-posts` in
-   the refresh command first, then run the same memory builder against that
-   longer triage directory. The memory builder is deterministic and local-only:
-   it writes theme clusters, source indexes, theme combinations, candidate
-   recipes, and pattern rules, but it does not call external LLM APIs, simulate,
-   or submit.
+   the refresh command first, then run the same builders against that longer
+   triage directory. The memory builders are deterministic and local-only: they
+   write theme clusters, candidate recipes, pattern rules, and community skills,
+   but they do not call external LLM APIs, simulate, or submit.
 
-5. Optional Windows daily task:
+5. Convert community/forum memory into a conservative submission policy:
+
+   ```powershell
+   python scripts/build_wq_submission_plan.py `
+     --forum-memory-dirs reports\wq_forum_research_<date>\idea_memory `
+     --community-skill-memory-file <local_tmp>\worldquant_community_daily_<date>\skill_memory\community_skill_memory.jsonl `
+     --output-dir reports\wq_submission_plan_<date> `
+     --no-obsidian
+   ```
+
+   Community skills are used as gates, risk flags, and repair routes. Do not
+   pass `community_skill_memory.jsonl` directly as a large candidate file.
+   The preferred presubmit path is still `presubmit-sequential`; pass the
+   generated `submission_policy.json` and the triage directory as context.
+
+6. Optional Windows daily task:
 
    ```powershell
    schtasks /Create /F /SC DAILY /ST 07:30 /TN worldquant_harness_WQ_Community_Daily /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command cd <repo_root>; python scripts\wq_community_daily_refresh.py --output-root <local_tmp> --run-prefix worldquant_community_daily"

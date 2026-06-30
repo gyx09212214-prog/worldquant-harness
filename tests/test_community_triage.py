@@ -98,3 +98,30 @@ def test_sentiment_hint_uses_platform_field():
     record = triage_item(item)
 
     assert "rank(ts_delta(scl12_sentiment_fast_d1, 5))" in record["candidate_expressions"]
+
+
+def test_triage_adds_experience_categories_for_repair_and_templates():
+    near_pass = build_community_items(
+        [{
+            "post_id": "p5",
+            "title": "Almost passing self correlation",
+            "body_text": "This alpha is near pass but self correlation is too high; changing only window does not work.",
+        }],
+        [],
+    )[0]
+    template = build_community_items(
+        [{
+            "post_id": "p6",
+            "title": "Alpha template",
+            "body_text": "Template idea: `rank(ts_corr(close, volume, 10))`; do not copy it directly.",
+        }],
+        [],
+    )[0]
+
+    near_record = triage_item(near_pass)
+    template_record = triage_item(template)
+
+    assert near_record["experience_category"] == "near_pass_repair"
+    assert "metric_near_pass" in near_record["risk_flags"]
+    assert template_record["experience_category"] == "alpha_template"
+    assert "template_clone_risk" in template_record["risk_flags"]

@@ -46,6 +46,11 @@ def test_public_harness_eval_writes_contract_artifacts(workdir):
     files = result["files"]
     expected_files = {
         "harness_run",
+        "hypotheses",
+        "alpha_gpt_candidate_specs",
+        "review_decisions",
+        "reflection_records",
+        "submit_evidence",
         "agent_trace",
         "artifacts",
         "decisions",
@@ -66,6 +71,10 @@ def test_public_harness_eval_writes_contract_artifacts(workdir):
         "duplicate_active_rejected",
         "no_real_submit",
         "profile_patch_generated_not_applied",
+        "alpha_gpt_hypothesis_written",
+        "alpha_gpt_candidate_specs_link_hypothesis",
+        "alpha_gpt_review_decisions_written",
+        "submit_evidence_requires_explicit_submit",
     }
     assert all(case["passed"] is True for case in eval_cases)
 
@@ -73,7 +82,7 @@ def test_public_harness_eval_writes_contract_artifacts(workdir):
     assert harness_run["schema_version"] == 1
     assert harness_run["status"] == "completed"
     assert harness_run["no_submit"] is True
-    assert harness_run["metrics"]["passed_count"] == 6
+    assert harness_run["metrics"]["passed_count"] == 10
     assert {step["role"] for step in harness_run["steps"]} >= {
         "researcher",
         "verifier",
@@ -88,16 +97,35 @@ def test_public_harness_eval_writes_contract_artifacts(workdir):
     assert [row["event_type"] for row in trace] == [
         "run_created",
         "context_loaded",
+        "hypothesis_created",
         "candidates_proposed",
+        "candidate_specs_constrained",
         "candidates_validated",
         "presubmit_ran",
         "gate_reviewed",
+        "review_decision_recorded",
         "evaluated",
         "reflected",
+        "submit_evidence_recorded",
         "profile_candidate_written",
         "memory_delta_written",
         "run_completed",
     ]
+
+    hypotheses = _read_jsonl(Path(files["hypotheses"]))
+    candidate_specs = _read_jsonl(Path(files["alpha_gpt_candidate_specs"]))
+    review_decisions = _read_jsonl(Path(files["review_decisions"]))
+    submit_evidence = _read_json(Path(files["submit_evidence"]))
+    assert len(hypotheses) == 1
+    assert {row["hypothesis_id"] for row in candidate_specs} == {hypotheses[0]["hypothesis_id"]}
+    assert {row["decision"] for row in review_decisions} >= {
+        "promote_to_review",
+        "retry_with_mutation",
+        "reject_with_memory",
+    }
+    assert submit_evidence["boundary_role"] == "terminal_evidence_source"
+    assert submit_evidence["explicit_submit_required"] is True
+    assert submit_evidence["real_submit_attempted"] is False
 
     profile_patch = _read_json(Path(files["profile_patch"]))
     assert profile_patch["no_submit"] is True
@@ -107,7 +135,7 @@ def test_public_harness_eval_writes_contract_artifacts(workdir):
     status = harness_status(workdir)
     assert status["ok"] is True
     assert status["run_id"] == "contract-eval-test"
-    assert status["passed_count"] == 6
+    assert status["passed_count"] == 10
 
 
 def test_memory_maintain_writes_delta_candidates(workdir):

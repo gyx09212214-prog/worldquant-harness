@@ -36,6 +36,11 @@ The command writes:
 - `experiments/<exp-id>/evaluations/public-harness-demo/run_report.md`
 - `demo_summary.json`
 - `reports/public_harness_eval/harness_run.json`
+- `reports/public_harness_eval/hypotheses.jsonl`
+- `reports/public_harness_eval/alpha_gpt_candidate_specs.jsonl`
+- `reports/public_harness_eval/review_decisions.jsonl`
+- `reports/public_harness_eval/reflection_records.jsonl`
+- `reports/public_harness_eval/submit_evidence.json`
 - `reports/public_harness_eval/agent_trace.jsonl`
 - `reports/public_harness_eval/eval_cases.jsonl`
 - `reports/public_harness_eval/memory_delta.jsonl`
@@ -78,7 +83,7 @@ The fixture intentionally contains:
 
 The demo never calls a real submit endpoint. It is meant for public documentation, screenshots, and harness regression checks.
 
-`run_public_harness_eval.py` wraps the same deterministic path as an agent contract suite. It asserts the ready candidate, strict self-correlation rejection, illegal-field rejection, active duplicate rejection, no-submit boundary, and profile patch non-application.
+`run_public_harness_eval.py` wraps the same deterministic path as an agent contract suite. It asserts the ready candidate, strict self-correlation rejection, illegal-field rejection, active duplicate rejection, no-submit boundary, profile patch non-application, Alpha-GPT hypothesis/spec/review artifacts, and explicit-submit evidence boundary.
 
 The visual pack is generated from the same artifacts. It avoids absolute local
 paths and is safe to publish as static GitHub documentation.

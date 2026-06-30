@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from .harness_contracts import (
+    AlphaGPTCandidateSpec,
+    AlphaGPTHypothesis,
+    AlphaGPTReflectionRecord,
+    AlphaGPTReviewDecision,
+    AlphaGPTSubmitEvidence,
     ArtifactRef,
     DecisionGate,
     HarnessEvent,
@@ -17,6 +22,7 @@ from .harness_contracts import (
     artifact_ref,
     now_utc,
     read_json,
+    read_jsonl,
     write_json,
     write_jsonl,
 )
@@ -58,13 +64,29 @@ def run_public_harness_eval(config: HarnessRunnerConfig) -> dict[str, Any]:
     existing_refs = _artifact_refs(files)
     profile_patch_payload = _profile_patch(config, existing_refs, evolution_result)
     memory_delta_rows = _memory_deltas(existing_refs, reject_counts)
+    semantic_artifacts = _alpha_gpt_semantic_artifacts(
+        config,
+        demo=demo,
+        files=files,
+        refs=existing_refs,
+        profile_patch=profile_patch_payload,
+        memory_delta_rows=memory_delta_rows,
+    )
     decision_rows = _decision_rows(config, demo, eval_summary)
-    trace_rows = _trace_rows(config, demo, eval_summary, profile_patch_payload, memory_delta_rows)
+    trace_rows = _trace_rows(
+        config,
+        demo,
+        eval_summary,
+        profile_patch_payload,
+        memory_delta_rows,
+        semantic_artifacts,
+    )
     eval_cases = _eval_cases(
         demo=demo,
         metrics=metrics,
         reject_counts=reject_counts,
         profile_patch=profile_patch_payload,
+        semantic_artifacts=semantic_artifacts,
     )
     eval_result = {
         "schema_version": 1,
@@ -82,6 +104,11 @@ def run_public_harness_eval(config: HarnessRunnerConfig) -> dict[str, Any]:
     }
 
     generated_files = {
+        "hypotheses": output_root / "hypotheses.jsonl",
+        "alpha_gpt_candidate_specs": output_root / "alpha_gpt_candidate_specs.jsonl",
+        "review_decisions": output_root / "review_decisions.jsonl",
+        "reflection_records": output_root / "reflection_records.jsonl",
+        "submit_evidence": output_root / "submit_evidence.json",
         "agent_trace": output_root / "agent_trace.jsonl",
         "decisions": output_root / "decisions.jsonl",
         "memory_delta": output_root / "memory_delta.jsonl",
@@ -89,6 +116,11 @@ def run_public_harness_eval(config: HarnessRunnerConfig) -> dict[str, Any]:
         "eval_cases": output_root / "eval_cases.jsonl",
         "eval_result": output_root / "eval_result.json",
     }
+    write_jsonl(generated_files["hypotheses"], semantic_artifacts["hypotheses"])
+    write_jsonl(generated_files["alpha_gpt_candidate_specs"], semantic_artifacts["candidate_specs"])
+    write_jsonl(generated_files["review_decisions"], semantic_artifacts["review_decisions"])
+    write_jsonl(generated_files["reflection_records"], semantic_artifacts["reflection_records"])
+    write_json(generated_files["submit_evidence"], semantic_artifacts["submit_evidence"])
     write_jsonl(generated_files["agent_trace"], trace_rows)
     write_jsonl(generated_files["decisions"], decision_rows)
     write_jsonl(generated_files["memory_delta"], memory_delta_rows)
@@ -128,7 +160,11 @@ def run_public_harness_eval(config: HarnessRunnerConfig) -> dict[str, Any]:
         status="completed" if eval_result["ok"] else "failed",
         no_submit=True,
         profile_name=config.profile_name,
-        source_refs=[ref for ref in existing_refs if ref.artifact_type in {"candidate_specs", "demo_summary"}],
+        source_refs=[
+            ref
+            for ref in [*existing_refs, *generated_refs]
+            if ref.artifact_type in {"candidate_specs", "demo_summary", "hypotheses"}
+        ],
         steps=steps,
         artifacts=[*existing_refs, *generated_refs, artifacts_ref],
         decisions=decisions,
@@ -400,23 +436,204 @@ def _artifact_refs(files: dict[str, str]) -> list[ArtifactRef]:
 
 
 def _producer_step_for_artifact(key: str) -> str:
+    if key in {"hypotheses"}:
+        return "hypothesis_created"
+    if key in {"alpha_gpt_candidate_specs"}:
+        return "candidate_specs_constrained"
     if key in {"candidate_specs", "legal_inputs"}:
         return "context_loaded"
     if key in {"presubmit_summary", "presubmit_loop_status", "ready", "rejected"}:
         return "presubmit_ran"
     if key in {"critic_report", "decision"}:
         return "gate_reviewed"
+    if key in {"review_decisions"}:
+        return "review_decision_recorded"
     if key in {"eval_summary", "run_report"}:
         return "evaluated"
     if key in {"eval_cases", "eval_result"}:
         return "evaluated"
+    if key in {"submit_evidence"}:
+        return "submit_evidence_recorded"
     if key in {"evolution_result", "profile_patch", "memory_delta"}:
+        return "reflected"
+    if key in {"reflection_records"}:
         return "reflected"
     if key in {"decisions"}:
         return "gate_reviewed"
     if key in {"agent_trace"}:
         return "run_completed"
     return "manifest"
+
+
+def _alpha_gpt_semantic_artifacts(
+    config: HarnessRunnerConfig,
+    *,
+    demo: dict[str, Any],
+    files: dict[str, str],
+    refs: list[ArtifactRef],
+    profile_patch: dict[str, Any],
+    memory_delta_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    candidate_rows = read_jsonl(files.get("candidate_specs", ""))
+    ready_rows = read_jsonl(files.get("ready", ""))
+    rejected_rows = read_jsonl(files.get("rejected", ""))
+    hypothesis_id = f"{config.run_id}:hypothesis:001"
+    hypothesis_refs = [ref for ref in refs if ref.artifact_type in {"candidate_specs", "demo_summary"}]
+    hypotheses = [
+        AlphaGPTHypothesis(
+            hypothesis_id=hypothesis_id,
+            run_id=config.run_id,
+            topic=config.topic,
+            statement=str(demo.get("hypothesis") or "Public synthetic candidates exercise the Alpha-GPT harness loop."),
+            rationale=(
+                "The public fixture proves hypothesis-to-candidate-to-review-to-reflection semantics "
+                "without external credentials or real submission."
+            ),
+            source_refs=hypothesis_refs,
+            expected_signal="ready candidate plus structured rejection memory",
+            status="tested",
+            created_at=now_utc(),
+        ).to_dict()
+    ]
+
+    candidate_specs: list[dict[str, Any]] = []
+    by_tag: dict[str, str] = {}
+    by_expression: dict[str, str] = {}
+    for index, row in enumerate(candidate_rows, start=1):
+        candidate_uid = str(row.get("candidate_uid") or row.get("candidate_spec_id") or f"{config.run_id}:candidate:{index:03d}")
+        expression = str(row.get("expression") or "")
+        tag = str(row.get("tag") or "")
+        by_tag[tag] = candidate_uid
+        by_expression[expression] = candidate_uid
+        candidate_specs.append(
+            AlphaGPTCandidateSpec(
+                candidate_uid=candidate_uid,
+                hypothesis_id=hypothesis_id,
+                expression=expression,
+                research_intent=str(row.get("rationale") or row.get("expected_low_corr_reason") or ""),
+                placeholder_template=str(row.get("placeholder_template") or expression),
+                placeholder_bindings=row.get("placeholder_bindings") if isinstance(row.get("placeholder_bindings"), dict) else {},
+                generation_constraints={
+                    "legal_field_registry": True,
+                    "operator_registry": True,
+                    "strict_legal_inputs": True,
+                    **(row.get("generation_constraints") if isinstance(row.get("generation_constraints"), dict) else {}),
+                },
+                source_family=str(row.get("source_family") or ""),
+                risk_flags=row.get("risk_flags") if isinstance(row.get("risk_flags"), list) else [],
+                created_at=now_utc(),
+            ).to_dict()
+        )
+
+    review_evidence = [ref for ref in refs if ref.artifact_type in {"ready", "rejected", "eval_summary"}]
+    review_decisions: list[dict[str, Any]] = []
+    for row in ready_rows:
+        review_decisions.append(
+            AlphaGPTReviewDecision(
+                candidate_uid=_semantic_candidate_uid(row, by_tag=by_tag, by_expression=by_expression, run_id=config.run_id),
+                hypothesis_id=hypothesis_id,
+                decision="promote_to_review",
+                reason=str(row.get("triage_reason") or "candidate passed public presubmit gates"),
+                evidence_refs=review_evidence,
+                metrics=_review_metrics(row),
+                next_action="human_select_explicit_submit_id",
+                human_required=True,
+                created_at=now_utc(),
+            ).to_dict()
+        )
+    for row in rejected_rows:
+        review_decisions.append(
+            AlphaGPTReviewDecision(
+                candidate_uid=_semantic_candidate_uid(row, by_tag=by_tag, by_expression=by_expression, run_id=config.run_id),
+                hypothesis_id=hypothesis_id,
+                decision=_semantic_reject_decision(row),
+                reason=str(
+                    row.get("reject_reason")
+                    or row.get("review_failure_kind")
+                    or row.get("api_check_status")
+                    or row.get("status")
+                    or "candidate rejected by presubmit gate"
+                ),
+                evidence_refs=review_evidence,
+                metrics=_review_metrics(row),
+                next_action=_semantic_next_action(row),
+                human_required=False,
+                created_at=now_utc(),
+            ).to_dict()
+        )
+
+    reflection_refs = [ref for ref in refs if ref.artifact_type in {"eval_summary", "evolution_result", "rejected"}]
+    memory_actions = sorted({str(row.get("action") or "") for row in memory_delta_rows if row.get("action")})
+    profile_actions = [
+        str(op.get("op") or "")
+        for op in (profile_patch.get("patch_ops") or [])
+        if isinstance(op, dict) and op.get("op")
+    ]
+    reflection_records = [
+        AlphaGPTReflectionRecord(
+            reflection_id=f"{config.run_id}:reflection:001",
+            run_id=config.run_id,
+            hypothesis_id=hypothesis_id,
+            conclusion=(
+                f"Public eval produced {len(ready_rows)} ready candidate(s) and {len(rejected_rows)} rejected "
+                "candidate(s); profile and memory updates remain reviewable artifacts."
+            ),
+            memory_actions=memory_actions,
+            profile_actions=profile_actions,
+            evidence_refs=reflection_refs,
+            created_at=now_utc(),
+        ).to_dict()
+    ]
+    submit_evidence = AlphaGPTSubmitEvidence(
+        run_id=config.run_id,
+        boundary_role="terminal_evidence_source",
+        status="not_attempted_in_public_eval",
+        explicit_submit_required=True,
+        selected_alpha_ids=[],
+        evidence_refs=[ref for ref in refs if ref.artifact_type in {"ready", "decision"}],
+        real_submit_attempted=False,
+        no_submit=True,
+        created_at=now_utc(),
+    ).to_dict()
+    return {
+        "hypotheses": hypotheses,
+        "candidate_specs": candidate_specs,
+        "review_decisions": review_decisions,
+        "reflection_records": reflection_records,
+        "submit_evidence": submit_evidence,
+    }
+
+
+def _semantic_candidate_uid(
+    row: dict[str, Any],
+    *,
+    by_tag: dict[str, str],
+    by_expression: dict[str, str],
+    run_id: str,
+) -> str:
+    tag = str(row.get("tag") or "")
+    expression = str(row.get("expression") or row.get("source_expression") or "")
+    return by_tag.get(tag) or by_expression.get(expression) or str(row.get("candidate_uid") or f"{run_id}:candidate:unknown")
+
+
+def _review_metrics(row: dict[str, Any]) -> dict[str, Any]:
+    keys = ("alpha_id", "sharpe", "fitness", "returns", "turnover", "sc_value", "prod_corr_value", "triage_bucket")
+    return {key: row.get(key) for key in keys if row.get(key) is not None}
+
+
+def _semantic_reject_decision(row: dict[str, Any]) -> str:
+    bucket = str(row.get("triage_bucket") or "").lower()
+    reason = str(row.get("reject_reason") or row.get("review_failure_kind") or row.get("api_check_status") or "").lower()
+    if "near_miss" in bucket or "near" in reason:
+        return "retry_with_mutation"
+    return "reject_with_memory"
+
+
+def _semantic_next_action(row: dict[str, Any]) -> str:
+    decision = _semantic_reject_decision(row)
+    if decision == "retry_with_mutation":
+        return "create_budgeted_repair_candidate"
+    return "write_memory_delta"
 
 
 def _profile_patch(
@@ -552,18 +769,43 @@ def _trace_rows(
     eval_summary: dict[str, Any],
     profile_patch: dict[str, Any],
     memory_delta_rows: list[dict[str, Any]],
+    semantic_artifacts: dict[str, Any],
 ) -> list[dict[str, Any]]:
     reject_counts = eval_summary.get("reject_counts") or {}
     metrics = eval_summary.get("metrics") or {}
     payloads = [
         ("run_created", "researcher", "context_loaded", {"topic": config.topic, "mode": config.mode}),
         ("context_loaded", "researcher", "context_loaded", {"experiment_dir": demo.get("experiment_dir")}),
+        (
+            "hypothesis_created",
+            "researcher",
+            "hypothesis_created",
+            {"hypothesis_count": len(semantic_artifacts.get("hypotheses") or [])},
+        ),
         ("candidates_proposed", "researcher", "candidates_proposed", {"candidate_count": 5}),
+        (
+            "candidate_specs_constrained",
+            "verifier",
+            "candidate_specs_constrained",
+            {"candidate_spec_count": len(semantic_artifacts.get("candidate_specs") or [])},
+        ),
         ("candidates_validated", "verifier", "candidates_validated", {"reject_counts": reject_counts}),
         ("presubmit_ran", "simulator", "presubmit_ran", demo.get("presubmit") or {}),
         ("gate_reviewed", "critic", "gate_reviewed", demo.get("gate") or {}),
+        (
+            "review_decision_recorded",
+            "critic",
+            "review_decision_recorded",
+            {"review_decision_count": len(semantic_artifacts.get("review_decisions") or [])},
+        ),
         ("evaluated", "verifier", "evaluated", {"harness_score": eval_summary.get("harness_score"), "metrics": metrics}),
         ("reflected", "reflector", "reflected", demo.get("evolution") or {}),
+        (
+            "submit_evidence_recorded",
+            "submitter",
+            "submit_evidence_recorded",
+            semantic_artifacts.get("submit_evidence") or {},
+        ),
         (
             "profile_candidate_written",
             "reflector",
@@ -615,6 +857,15 @@ def _steps(
             finished_at=time,
         ),
         HarnessStep(
+            step_id="hypothesis_created",
+            run_id=config.run_id,
+            role="researcher",
+            action="write Alpha-GPT hypothesis artifact",
+            output_refs=refs_for("hypothesis_created", generated_refs),
+            started_at=time,
+            finished_at=time,
+        ),
+        HarnessStep(
             step_id="candidates_proposed",
             run_id=config.run_id,
             role="researcher",
@@ -623,6 +874,17 @@ def _steps(
             started_at=time,
             finished_at=time,
             metrics={"candidate_count": 5},
+        ),
+        HarnessStep(
+            step_id="candidate_specs_constrained",
+            run_id=config.run_id,
+            role="verifier",
+            action="link placeholder-style candidate specs to the hypothesis and legal constraints",
+            input_refs=[ref for ref in existing_refs if ref.artifact_type == "candidate_specs"],
+            output_refs=refs_for("candidate_specs_constrained", generated_refs),
+            started_at=time,
+            finished_at=time,
+            metrics={"candidate_spec_count": 5},
         ),
         HarnessStep(
             step_id="candidates_validated",
@@ -655,6 +917,16 @@ def _steps(
             finished_at=time,
         ),
         HarnessStep(
+            step_id="review_decision_recorded",
+            run_id=config.run_id,
+            role="critic",
+            action="record Alpha-GPT review decisions for promote, retry, and reject outcomes",
+            input_refs=[ref for ref in existing_refs if ref.artifact_type in {"ready", "rejected"}],
+            output_refs=refs_for("review_decision_recorded", generated_refs),
+            started_at=time,
+            finished_at=time,
+        ),
+        HarnessStep(
             step_id="evaluated",
             run_id=config.run_id,
             role="verifier",
@@ -672,6 +944,16 @@ def _steps(
             output_refs=[*refs_for("reflected", existing_refs), *[ref for ref in generated_refs if ref.artifact_type in {"profile_patch", "memory_delta"}]],
             started_at=time,
             finished_at=time,
+        ),
+        HarnessStep(
+            step_id="submit_evidence_recorded",
+            run_id=config.run_id,
+            role="submitter",
+            action="record explicit-submit evidence boundary for the Alpha-GPT loop",
+            output_refs=refs_for("submit_evidence_recorded", generated_refs),
+            started_at=time,
+            finished_at=time,
+            metrics={"real_submit_attempted": False, "explicit_submit_required": True},
         ),
         HarnessStep(
             step_id="submit_guard",
@@ -692,7 +974,13 @@ def _eval_cases(
     metrics: dict[str, Any],
     reject_counts: dict[str, Any],
     profile_patch: dict[str, Any],
+    semantic_artifacts: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    hypotheses = semantic_artifacts.get("hypotheses") or []
+    candidate_specs = semantic_artifacts.get("candidate_specs") or []
+    review_decisions = semantic_artifacts.get("review_decisions") or []
+    submit_evidence = semantic_artifacts.get("submit_evidence") or {}
+    hypothesis_ids = {str(row.get("hypothesis_id") or "") for row in hypotheses}
     cases = [
         ("ready_candidate", metrics.get("ready_count") == 1, {"ready_count": metrics.get("ready_count")}),
         (
@@ -715,6 +1003,35 @@ def _eval_cases(
             "profile_patch_generated_not_applied",
             bool(profile_patch.get("patch_ops")) and all(not op.get("auto_applied") for op in profile_patch.get("patch_ops") or []),
             {"patch_ops": len(profile_patch.get("patch_ops") or [])},
+        ),
+        (
+            "alpha_gpt_hypothesis_written",
+            len(hypotheses) == 1 and bool(hypotheses[0].get("statement")),
+            {"hypothesis_count": len(hypotheses)},
+        ),
+        (
+            "alpha_gpt_candidate_specs_link_hypothesis",
+            len(candidate_specs) == 5
+            and bool(hypothesis_ids)
+            and all(str(row.get("hypothesis_id") or "") in hypothesis_ids for row in candidate_specs),
+            {"candidate_spec_count": len(candidate_specs), "hypothesis_ids": sorted(hypothesis_ids)},
+        ),
+        (
+            "alpha_gpt_review_decisions_written",
+            len(review_decisions) >= 3
+            and {"promote_to_review", "retry_with_mutation", "reject_with_memory"}
+            <= {str(row.get("decision") or "") for row in review_decisions},
+            {"review_decision_count": len(review_decisions)},
+        ),
+        (
+            "submit_evidence_requires_explicit_submit",
+            submit_evidence.get("explicit_submit_required") is True
+            and submit_evidence.get("real_submit_attempted") is False
+            and submit_evidence.get("no_submit") is True,
+            {
+                "explicit_submit_required": submit_evidence.get("explicit_submit_required"),
+                "real_submit_attempted": submit_evidence.get("real_submit_attempted"),
+            },
         ),
     ]
     return [

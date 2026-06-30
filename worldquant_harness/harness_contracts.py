@@ -38,12 +38,16 @@ HARNESS_RUN_STATUSES = {
 HARNESS_EVENT_TYPES = {
     "run_created",
     "context_loaded",
+    "hypothesis_created",
     "candidates_proposed",
+    "candidate_specs_constrained",
     "candidates_validated",
     "presubmit_ran",
     "gate_reviewed",
+    "review_decision_recorded",
     "evaluated",
     "reflected",
+    "submit_evidence_recorded",
     "profile_candidate_written",
     "memory_delta_written",
     "run_completed",
@@ -143,6 +147,109 @@ class ProfilePatch:
     patch_ops: list[dict[str, Any]] = field(default_factory=list)
     evidence_refs: list[ArtifactRef] = field(default_factory=list)
     risk_notes: list[str] = field(default_factory=list)
+    no_submit: bool = True
+    schema_version: int = HARNESS_SCHEMA_VERSION
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict_clean(self)
+        payload["evidence_refs"] = [ref.to_dict() for ref in self.evidence_refs]
+        validate_no_submit(payload)
+        return payload
+
+
+@dataclass(frozen=True)
+class AlphaGPTHypothesis:
+    hypothesis_id: str
+    run_id: str
+    topic: str
+    statement: str
+    rationale: str = ""
+    source_refs: list[ArtifactRef] = field(default_factory=list)
+    expected_signal: str = ""
+    status: str = "proposed"
+    no_submit: bool = True
+    schema_version: int = HARNESS_SCHEMA_VERSION
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict_clean(self)
+        payload["source_refs"] = [ref.to_dict() for ref in self.source_refs]
+        validate_no_submit(payload)
+        return payload
+
+
+@dataclass(frozen=True)
+class AlphaGPTCandidateSpec:
+    candidate_uid: str
+    hypothesis_id: str
+    expression: str
+    research_intent: str = ""
+    placeholder_template: str = ""
+    placeholder_bindings: dict[str, Any] = field(default_factory=dict)
+    generation_constraints: dict[str, Any] = field(default_factory=dict)
+    source_family: str = ""
+    risk_flags: list[str] = field(default_factory=list)
+    no_submit: bool = True
+    schema_version: int = HARNESS_SCHEMA_VERSION
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict_clean(self)
+        validate_no_submit(payload)
+        return payload
+
+
+@dataclass(frozen=True)
+class AlphaGPTReviewDecision:
+    candidate_uid: str
+    hypothesis_id: str
+    decision: str
+    reason: str
+    evidence_refs: list[ArtifactRef] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    next_action: str = ""
+    human_required: bool = False
+    no_submit: bool = True
+    schema_version: int = HARNESS_SCHEMA_VERSION
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict_clean(self)
+        payload["evidence_refs"] = [ref.to_dict() for ref in self.evidence_refs]
+        validate_no_submit(payload)
+        return payload
+
+
+@dataclass(frozen=True)
+class AlphaGPTReflectionRecord:
+    reflection_id: str
+    run_id: str
+    hypothesis_id: str
+    conclusion: str
+    memory_actions: list[str] = field(default_factory=list)
+    profile_actions: list[str] = field(default_factory=list)
+    evidence_refs: list[ArtifactRef] = field(default_factory=list)
+    no_submit: bool = True
+    schema_version: int = HARNESS_SCHEMA_VERSION
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict_clean(self)
+        payload["evidence_refs"] = [ref.to_dict() for ref in self.evidence_refs]
+        validate_no_submit(payload)
+        return payload
+
+
+@dataclass(frozen=True)
+class AlphaGPTSubmitEvidence:
+    run_id: str
+    boundary_role: str
+    status: str
+    explicit_submit_required: bool = True
+    selected_alpha_ids: list[str] = field(default_factory=list)
+    evidence_refs: list[ArtifactRef] = field(default_factory=list)
+    real_submit_attempted: bool = False
     no_submit: bool = True
     schema_version: int = HARNESS_SCHEMA_VERSION
     created_at: str = ""

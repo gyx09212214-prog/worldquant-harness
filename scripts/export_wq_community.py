@@ -125,6 +125,7 @@ def main() -> int:
     parser.add_argument("--no-auth", action="store_true", help="Skip WQ email/password authentication")
     parser.add_argument("--triage", action="store_true", help="Run triage_wq_community after export")
     parser.add_argument("--min-score", type=int, default=15, help="Triage min score when --triage is set")
+    parser.add_argument("--max-candidates-per-record", type=int, default=5)
     args = parser.parse_args()
 
     client = WQBrainClient()
@@ -174,6 +175,7 @@ def main() -> int:
                 comments_file=manifest["comments_file"],
                 output_dir=triage_dir,
                 min_score=args.min_score,
+                max_candidates_per_record=args.max_candidates_per_record,
             )
         )
         print(triage_manifest["output_dir"])

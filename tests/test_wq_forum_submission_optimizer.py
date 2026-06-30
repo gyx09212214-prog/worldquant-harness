@@ -136,6 +136,17 @@ def test_build_forum_submission_plan_writes_policy_and_playbook(workdir):
     )
     _write_jsonl(memory / "forum_pattern_rules.jsonl", [{"rule_id": "direct", "logic": "do not submit direct snippets"}])
     _write_jsonl(memory / "forum_idea_theme_combinations.jsonl", [{"theme_a": "fundamental_value_quality", "theme_b": "correlation_similarity", "shared_sources": 3}])
+    _write_jsonl(
+        memory / "community_skill_memory.jsonl",
+        [
+            {
+                "skill_id": "community::submission_gate",
+                "memory_kind": "community_submission_gate_skill",
+                "action": "Gate direct templates before submit.",
+                "evidence": {"record_count": 3},
+            }
+        ],
+    )
 
     plan = build_forum_submission_plan(ForumSubmissionOptimizerConfig(
         factor_map_dir=factor_map,
@@ -145,12 +156,16 @@ def test_build_forum_submission_plan_writes_policy_and_playbook(workdir):
     ))
 
     assert plan["ok"] is True
+    assert plan["summary"]["community_skills"] == 1
     assert [row["direction_id"] for row in plan["directions"]].count("theme:fundamental_value_quality") == 1
     assert "fundamental_value_quality" in plan["submission_policy"]["theme_policies"]
     assert "correlation_similarity" in plan["submission_policy"]["rules"]
+    assert plan["submission_policy"]["community_skill_policy"]["enabled"] is True
     assert plan["candidate_budget"]["allocations"]
     assert (output / "submission_policy.json").is_file()
-    assert (output / "forum_submission_playbook.md").read_text(encoding="utf-8").startswith("---")
+    playbook = (output / "forum_submission_playbook.md").read_text(encoding="utf-8")
+    assert playbook.startswith("---")
+    assert "Community Skill Gates" in playbook
 
 
 def test_candidate_policy_blocks_direct_forum_templates_without_overlay(workdir):
@@ -177,6 +192,43 @@ def test_candidate_policy_blocks_direct_forum_templates_without_overlay(workdir)
     assert blocked["reason"] == "forum_direct_template_risk"
     assert allowed["action"] != "block"
     assert allowed["orthogonal_overlay"] is True
+
+
+def test_candidate_policy_applies_community_skill_risk_flags(workdir):
+    memory = workdir / "memory"
+    factor_map = workdir / "factor_map"
+    _write_jsonl(factor_map / "nodes.jsonl", [])
+    _write_jsonl(factor_map / "edges.jsonl", [])
+    _write_jsonl(memory / "community_skill_memory.jsonl", [
+        {
+            "skill_id": "community::alpha_template_transform",
+            "memory_kind": "community_alpha_template_skill",
+            "action": "Transform public templates before use.",
+            "evidence": {"record_count": 2, "risk_counts": {"template_clone_risk": 2, "field_family_crowding": 1}},
+        }
+    ])
+    policy = build_forum_submission_plan(ForumSubmissionOptimizerConfig(
+        factor_map_dir=factor_map,
+        forum_memory_dirs=(memory,),
+        output_dir=None,
+    ))["submission_policy"]
+
+    blocked = evaluate_candidate_policy(
+        {"expression": "rank(ts_rank(volume, 20))", "risk_flags": ["template_clone_risk"]},
+        policy,
+    )
+    penalized = evaluate_candidate_policy(
+        {
+            "expression": "rank(ts_rank(cashflow_op / cap, 80) - ts_rank(returns, 20))",
+            "risk_flags": ["field_family_crowding"],
+        },
+        policy,
+    )
+
+    assert blocked["action"] == "block"
+    assert blocked["reason"] == "template_clone_risk"
+    assert penalized["action"] == "penalize"
+    assert "community_skill_risk:field_family_crowding" in penalized["reason"]
 
 
 def test_submitted_alpha_map_policy_penalizes_returns_main_anchor(workdir):

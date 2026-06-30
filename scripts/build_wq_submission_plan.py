@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=output_dir,
             obsidian_output=obsidian_output,
             submitted_alpha_map_dir=_resolve(args.submitted_alpha_map_dir) if args.submitted_alpha_map_dir else None,
+            community_skill_memory_file=_resolve(args.community_skill_memory_file) if args.community_skill_memory_file else None,
             region=args.region,
             universe=args.universe,
             account=args.account,
@@ -57,6 +58,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--factor-map-dir", default="reports/wq_factor_map_smoke_20260609")
     parser.add_argument("--forum-memory-dirs", nargs="*", default=[])
     parser.add_argument("--submitted-alpha-map-dir", default="")
+    parser.add_argument("--community-skill-memory-file", default="")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--obsidian-output", default="")
     parser.add_argument("--no-obsidian", action="store_true")

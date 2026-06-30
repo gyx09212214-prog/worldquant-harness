@@ -16,6 +16,7 @@ Agent generates candidates -> harness records, gates, evaluates, remembers, and 
 [Quick Start](docs/QUICKSTART.md) ·
 [Visual Guide](docs/VISUAL_GUIDE.md) ·
 [Public Demo](docs/PUBLIC_HARNESS_DEMO.md) ·
+[Alpha-GPT Harness](docs/ALPHA_GPT_HARNESS.md) ·
 [Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) ·
 [Agent Roles](docs/AGENT_ROLES.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
@@ -32,9 +33,9 @@ Agent generates candidates -> harness records, gates, evaluates, remembers, and 
 
 ## What It Is
 
-worldquant-harness is not a one-shot alpha generator. It is an execution and memory layer for agentic alpha research.
+worldquant-harness is not a one-shot alpha generator. It is an explicit-submit, memory-driven Alpha-GPT-style research harness for WorldQuant-oriented alpha workflows.
 
-The agent can propose ideas, run batches, and inspect outcomes. The harness owns the lifecycle: candidate identity, sandbox execution, no-submit gates, review queues, rejection reasons, historical memory, profile evolution, and the explicit boundary before any real WQ BRAIN action.
+The agent can propose hypotheses, candidate specs, batches, and reviews. The harness owns the lifecycle: candidate identity, sandbox execution, no-submit gates, review queues, rejection reasons, historical memory, profile evolution, and the explicit boundary before any real WQ BRAIN action.
 
 This project is not affiliated with or endorsed by WorldQuant or WorldQuant BRAIN. Review [Disclaimer](DISCLAIMER.md), [Security](SECURITY.md), and [Responsible Use](docs/SECURITY_AND_LIMITATIONS.md) before connecting credentials or publishing artifacts.
 
@@ -85,13 +86,29 @@ The demo writes a complete no-submit research bundle:
 | Artifact | Purpose |
 |:--|:--|
 | `candidate_specs.jsonl` | Candidate source, tags, and design intent |
+| `hypotheses.jsonl` | Alpha-GPT-style research hypothesis |
+| `alpha_gpt_candidate_specs.jsonl` | Candidate specs linked to placeholder templates, bindings, constraints, and hypothesis |
 | `simulation_results.jsonl` | Guarded adapter outcomes |
 | `review_queue.jsonl` | Candidates queued for gate review |
+| `review_decisions.jsonl` | Promote/retry/reject decisions for the Alpha-GPT loop |
 | `presubmit_ready_sequential.jsonl` | Accepted candidates |
 | `presubmit_rejected.jsonl` | Rejection reasons and blocker memory |
 | `alpha_lifecycle_events.jsonl` | Append-only lifecycle trace |
+| `submit_evidence.json` | Explicit-submit boundary evidence; public eval records no real submit attempt |
 | `eval_summary.json` | Harness score and gate decision |
 | `evolution_result.json` | Next-generation profile candidate |
+
+## Alpha-GPT Dry Run
+
+The smallest no-submit Alpha-GPT loop does not need WQ BRAIN credentials:
+
+```bash
+python scripts/wq_alpha_gpt_workflow.py demo --topic "analyst revision momentum"
+```
+
+It writes hypothesis, placeholder template, candidate spec, local validation,
+review queue, reflection memory, profile patch, and submit-evidence artifacts
+under `reports/examples/alpha_gpt_demo/`.
 
 ## Visual Pack
 
@@ -143,7 +160,7 @@ The agent can explore, but it works inside a contract. The harness owns state an
 | Plan the next batch | Profile evolution and explicit child experiment |
 | Submit | Human-selected alpha IDs only |
 
-The executable contract is implemented through `HarnessRun`, `HarnessStep`, `HarnessEvent`, `ArtifactRef`, `DecisionGate`, `MemoryDelta`, and `ProfilePatch`. See [Agent Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) and [Agent Roles](docs/AGENT_ROLES.md).
+The executable contract is implemented through `HarnessRun`, `HarnessStep`, `HarnessEvent`, `ArtifactRef`, `DecisionGate`, `MemoryDelta`, `ProfilePatch`, and the Alpha-GPT semantic records for hypothesis, candidate spec, review decision, reflection, and submit evidence. See [Agent Harness Contract](docs/AGENT_HARNESS_CONTRACT.md), [Alpha-GPT Harness](docs/ALPHA_GPT_HARNESS.md), and [Agent Roles](docs/AGENT_ROLES.md).
 
 ## Core Capabilities
 

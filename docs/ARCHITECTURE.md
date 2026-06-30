@@ -110,12 +110,13 @@ Rank-based 分组回测引擎。
 
 WQ harness 将 agent 研究流从“生成候选”变成可审计的实验：
 
+- Alpha-GPT semantic layer 将 research brief 拆成 `hypotheses.jsonl`、`alpha_gpt_candidate_specs.jsonl`、`review_decisions.jsonl`、`reflection_records.jsonl` 和 `submit_evidence.json`
 - `wq_research_sandbox.py` 创建 experiment、候选文件、critic report 和 gate decision
 - `wq_agent_workflow.py presubmit-sequential` 运行候选筛选、模拟、check-only 复核、virtual active 去重和 ready/rejected 输出
 - `wq_research_harness.py` 汇总 ready rate、自相关拒绝、相似拒绝、非法输入、字段签名多样性、latency 和显式 submit 结果，计算 harness score
 - `scripts/run_public_harness_demo.py` 使用 synthetic fixture 跑完整 demo，不需要真实平台或私有凭证，也不会提交
 
-Sandbox、public demo、research miner 和 `presubmit-sequential` 都是 no-submit 路径；真实提交只能通过显式 submit 命令或显式 submit API 触发。
+Sandbox、public demo、research miner 和 `presubmit-sequential` 都是 no-submit 路径；真实提交只能通过显式 submit 命令或显式 submit API 触发。Alpha-GPT 层把 submit 定位为末端证据源：只有人工选择的 alpha ID 能进入真实提交，post-submit 结果再用于后续 review、memory 和 profile evolution。
 
 ## 5. Data Pipeline (`market_data.py`)
 

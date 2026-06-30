@@ -7,6 +7,7 @@ isolated behind the submit mode and an explicit count or alpha id list.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -986,7 +987,7 @@ class CommunityScoutAgent:
     def run(self, *, active_inventory: dict | None = None) -> dict:
         active_fields = set((active_inventory or {}).get("field_counts") or {})
         rows: list[dict] = []
-        context = CommunityContext.from_dir(self.config.community_context_dir) if self.config.community_context_dir else None
+        context = _community_context_for_config(self.config)
         if context:
             for seed in context.seed_candidates(limit=max(10, self.config.target_candidates * 2)):
                 fields = _fields(seed.expression)
@@ -994,15 +995,24 @@ class CommunityScoutAgent:
                     "created_at": _now(),
                     "source": "community_context",
                     "tag": seed.tag,
-                    "expression": seed.expression,
+                    "source_expression_hash": hashlib.sha256(normalize_expression(seed.expression).encode("utf-8")).hexdigest()[:16],
                     "fields": fields,
                     "operators": _operators(seed.expression),
                     "low_overlap_fields": sorted(set(fields) - active_fields),
                     "field_overlap_with_active": _jaccard(set(fields), active_fields),
+                    "experience_category": seed.experience_category,
+                    "risk_flags": seed.risk_flags or [],
+                    "community_skill_route": _community_skill_route_for_flags(seed.risk_flags or []),
                     "diagnosis": seed.diagnosis,
                 })
         _write_jsonl(self.paths.field_opportunities, rows)
-        return {"ok": True, "opportunities": len(rows), "output": str(self.paths.field_opportunities)}
+        return {
+            "ok": True,
+            "opportunities": len(rows),
+            "community_context_dir": str(context.context_dir) if context else "",
+            "community_skills": len(context.skills) if context else 0,
+            "output": str(self.paths.field_opportunities),
+        }
 
 
 class MemoryContextBuilder:
@@ -1015,6 +1025,8 @@ class MemoryContextBuilder:
 
     def run(self, *, active_inventory: dict | None = None) -> dict:
         active_inventory = active_inventory or {"active": []}
+        community_context = _community_context_for_config(self.config)
+        community_skills = community_context.skill_summary(limit=12) if community_context else []
         context = {
             "created_at": _now(),
             "settings": _settings(self.config),
@@ -1022,6 +1034,9 @@ class MemoryContextBuilder:
             "active_field_counts": active_inventory.get("field_counts") or {},
             "active_operator_counts": active_inventory.get("operator_counts") or {},
             "field_opportunities": _summarize_rows(_read_jsonl(self.paths.field_opportunities), limit=30),
+            "community_context_dir": str(community_context.context_dir) if community_context else "",
+            "community_skill_count": len(community_context.skills) if community_context else 0,
+            "community_skills": community_skills,
             "ledger_failures": _summarize_rows(self._ledger_rows(["self_corr_fail", "prod_corr_fail", "weak", "invalid"], 40), limit=40),
             "ledger_near_miss": _summarize_rows(self._ledger_rows(["pre_submit_pass", "correlation_pending"], 20), limit=20),
             "post_submit_lessons": _summarize_rows(_latest_post_submit_lessons(limit=40), limit=40),
@@ -1033,6 +1048,8 @@ class MemoryContextBuilder:
                 "Generate new WorldQuant BRAIN FASTEXPR alphas using memory as constraints.",
                 "Prefer old successful families as examples, but do not copy exact active expressions.",
                 "Use community fields as low-correlation data inspiration.",
+                "Treat community skills as conservative gates and repair routes, not direct formula sources.",
+                "Transform public templates through field-family/operator-family changes and orthogonal overlays before simulation.",
                 "After self-correlation failures, change field or operator family, not only windows.",
             ],
         }
@@ -1045,6 +1062,8 @@ class MemoryContextBuilder:
             "ledger_failures": len(context["ledger_failures"]),
             "post_submit_lessons": len(context["post_submit_lessons"]),
             "field_opportunities": len(context["field_opportunities"]),
+            "community_skills": len(context["community_skills"]),
+            "community_context_dir": context["community_context_dir"],
             "output": str(self.paths.memory_context),
             "markdown": str(self.paths.memory_context_markdown),
         }
@@ -1703,12 +1722,19 @@ class FailureReviewAgent:
         if not repair_rows:
             repair_rows = [build_repair_record(row) for row in repairable]
             repair_rows = [row for row in repair_rows if row]
+        repair_rows = [_attach_repair_skill_annotations(record, repairable) for record in repair_rows]
         _write_jsonl(self.paths.repair_queue, repair_rows)
         postmortem = {
             "ok": True,
             "created_at": _now(),
             "total": len(rows),
             "bucket_counts": dict(sorted(Counter(row.get("triage_bucket") or row.get("status") for row in rows).items())),
+            "community_skill_tags": dict(sorted(Counter(
+                tag for row in repairable for tag in (row.get("community_skill_tags") or [])
+            ).items())),
+            "repair_strategy_hints": dict(sorted(Counter(
+                hint for row in repairable for hint in (row.get("repair_strategy_hints") or [])
+            ).items())),
             "repairable": len(repair_rows),
             "model_repairs": model_summary,
             "repair_queue": str(self.paths.repair_queue),
@@ -1800,6 +1826,78 @@ def classify_simulation_result(candidate: dict, result: dict) -> dict:
     return annotate_candidate_identity(row)
 
 
+def _community_skill_route_for_flags(flags: list[str] | set[str]) -> list[str]:
+    values = {str(flag) for flag in flags if flag}
+    routes: list[str] = []
+    if values & {"metric_near_pass"}:
+        routes.append("community::near_pass_repair")
+    if values & {"template_clone_risk", "possible_complete_alpha", "private_code"}:
+        routes.append("community::alpha_template_transform")
+    if values & {"high_turnover", "low_turnover", "unit_check", "platform_limit", "operator_availability_risk"}:
+        routes.append("community::operation_attribution")
+    if values & {"correlation_risk", "stale_precheck_risk", "field_family_crowding", "unknown_or_unsupported"}:
+        routes.append("community::submission_gate")
+    return list(dict.fromkeys(routes))
+
+
+def _community_repair_annotations(row: dict) -> dict:
+    flags = {
+        str(flag)
+        for key in ("risk_flags", "community_skill_risk_flags")
+        for flag in _as_list(row.get(key))
+        if flag
+    }
+    tags = _community_skill_route_for_flags(flags)
+    failure_tags: list[str] = []
+    hints: list[str] = []
+    reason_text = " ".join(str(row.get(key) or "") for key in ("triage_reason", "status", "api_check_status")).lower()
+    failed_checks = row.get("failed_platform_checks") or []
+    failed_names = {str(check.get("name") or "").upper() for check in failed_checks if isinstance(check, dict)}
+
+    if row.get("triage_bucket") == NEAR_MISS_REPAIR:
+        tags.append("community::near_pass_repair")
+        failure_tags.append("near_pass_repair")
+        hints.append("preserve_economic_idea_before_broad_regeneration")
+    if "self-correlation" in reason_text or str(row.get("sc_result") or "").upper() == "FAIL":
+        failure_tags.append("near_pass_self_corr")
+        hints.append("change_field_or_operator_family_before_window_tuning")
+    if "LOW_FITNESS" in failed_names or "LOW_SHARPE" in failed_names or "LOW_SUB_UNIVERSE_SHARPE" in failed_names:
+        failure_tags.append("metric_threshold_near_pass")
+        hints.append("keep_structure_and_try_small_settings_or_smoothing_grid")
+    if "HIGH_TURNOVER" in failed_names or "high_turnover" in flags:
+        tags.append("community::operation_attribution")
+        failure_tags.append("high_turnover")
+        hints.append("reduce_trading_speed_with_decay_trade_when_or_hump")
+    if "LOW_TURNOVER" in failed_names or "low_turnover" in flags:
+        tags.append("community::operation_attribution")
+        failure_tags.append("low_turnover")
+        hints.append("increase_signal_refresh_or_relax_trade_condition")
+    if "template_clone_risk" in flags:
+        tags.append("community::alpha_template_transform")
+        failure_tags.append("template_clone_risk")
+        hints.append("require_field_family_or_operator_family_transform")
+    if "field_family_crowding" in flags:
+        tags.append("community::submission_gate")
+        failure_tags.append("field_family_crowding")
+        hints.append("limit_same_field_signature_budget")
+
+    return {
+        "community_skill_tags": list(dict.fromkeys(tags)),
+        "skill_failure_tags": list(dict.fromkeys(failure_tags)),
+        "repair_strategy_hints": list(dict.fromkeys(hints)),
+    }
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
 def classify_review_row(source_row: dict, check_result: dict | None = None) -> dict:
     check_result = check_result or {}
     row = {**source_row}
@@ -1864,6 +1962,7 @@ def classify_review_row(source_row: dict, check_result: dict | None = None) -> d
         "review_checks": review_checks,
         "submit_probe_reason": reason if bucket == SUBMIT_PROBE_NEEDED else None,
     })
+    row.update(_community_repair_annotations(row))
     return annotate_candidate_identity(row)
 
 
@@ -2018,6 +2117,7 @@ def _load_rejected_expression_keys(paths: list[Path]) -> set[str]:
 
 _SUBMISSION_POLICY_CACHE: dict[str, dict[str, Any] | None] = {}
 _LEGAL_INPUT_REGISTRY_CACHE: dict[str, Any] = {}
+_COMMUNITY_CONTEXT_CACHE: dict[str, CommunityContext | None] = {}
 
 
 def _submission_policy_for_config(config: WQAgentWorkflowConfig | None) -> dict[str, Any] | None:
@@ -2038,6 +2138,15 @@ def _legal_input_registry_for_config(config: WQAgentWorkflowConfig | None) -> An
     return _LEGAL_INPUT_REGISTRY_CACHE[key]
 
 
+def _community_context_for_config(config: WQAgentWorkflowConfig | None) -> CommunityContext | None:
+    if config is None:
+        return None
+    key = str(config.community_context_dir or os.environ.get("WQ_COMMUNITY_CONTEXT_DIR") or "__default__")
+    if key not in _COMMUNITY_CONTEXT_CACHE:
+        _COMMUNITY_CONTEXT_CACHE[key] = CommunityContext.from_dir(config.community_context_dir)
+    return _COMMUNITY_CONTEXT_CACHE[key]
+
+
 def _filter_candidate_pool_for_presubmit(
     path: Path,
     *,
@@ -2051,6 +2160,8 @@ def _filter_candidate_pool_for_presubmit(
     kept = []
     skipped = []
     skip_reasons: Counter[str] = Counter()
+    policy_actions: Counter[str] = Counter()
+    skill_risk_flags: Counter[str] = Counter()
     active_rows = active_rows or []
     active_family_counts = _active_family_counts(active_rows)
     active_field_signature_counts = _active_field_signature_counts(active_rows)
@@ -2142,6 +2253,9 @@ def _filter_candidate_pool_for_presubmit(
                 },
                 submission_policy,
             )
+            if policy_row.get("forum_policy_action"):
+                policy_actions[str(policy_row.get("forum_policy_action"))] += 1
+            skill_risk_flags.update(str(flag) for flag in policy_row.get("community_skill_risk_flags") or [] if flag)
             if policy_row.get("forum_policy_action") == "block":
                 reason = str(policy_row.get("forum_policy_reason") or "forum_policy_block")
                 skipped.append({**policy_row, "candidate_skip_reason": reason})
@@ -2162,6 +2276,8 @@ def _filter_candidate_pool_for_presubmit(
         "kept": len(kept),
         "skipped": len(skipped),
         "skip_reasons": dict(sorted(skip_reasons.items())),
+        "policy_actions": dict(sorted(policy_actions.items())),
+        "community_skill_risk_flags": dict(skill_risk_flags.most_common()),
     }
 
 
@@ -2366,8 +2482,33 @@ def build_repair_record(row: dict) -> dict:
         "fitness": row.get("fitness"),
         "turnover": row.get("turnover"),
         "candidate_expressions": [],
-        "risk_notes": row.get("risk_flags") or [],
+        "community_skill_tags": row.get("community_skill_tags") or [],
+        "skill_failure_tags": row.get("skill_failure_tags") or [],
+        "repair_strategy_hints": row.get("repair_strategy_hints") or [],
+        "risk_notes": list(dict.fromkeys((row.get("risk_flags") or []) + (row.get("repair_strategy_hints") or []))),
         "source_row": row,
+    }
+
+
+def _attach_repair_skill_annotations(record: dict, repairable_rows: list[dict]) -> dict:
+    source_expression = normalize_expression(str(record.get("source_expression") or ""))
+    source_row = record.get("source_row") if isinstance(record.get("source_row"), dict) else {}
+    if not source_row and source_expression:
+        for row in repairable_rows:
+            if normalize_expression(str(row.get("expression") or "")) == source_expression:
+                source_row = row
+                break
+    annotations = _community_repair_annotations(source_row) if source_row else {}
+    tags = list(dict.fromkeys((record.get("community_skill_tags") or []) + (annotations.get("community_skill_tags") or [])))
+    failure_tags = list(dict.fromkeys((record.get("skill_failure_tags") or []) + (annotations.get("skill_failure_tags") or [])))
+    hints = list(dict.fromkeys((record.get("repair_strategy_hints") or []) + (annotations.get("repair_strategy_hints") or [])))
+    risk_notes = list(dict.fromkeys((record.get("risk_notes") or []) + hints))
+    return {
+        **record,
+        "community_skill_tags": tags,
+        "skill_failure_tags": failure_tags,
+        "repair_strategy_hints": hints,
+        "risk_notes": risk_notes,
     }
 
 
@@ -2404,13 +2545,29 @@ def render_memory_context_markdown(context: dict) -> str:
     lines.extend(["", "## Community Field Opportunities"])
     for row in context.get("field_opportunities") or []:
         fields = ", ".join(str(field) for field in (row.get("low_overlap_fields") or row.get("fields") or [])[:8])
-        lines.append(f"- {row.get('tag') or row.get('source') or 'community'}: fields={fields}; expr={_short_expr(row.get('expression'))}")
+        risks = ", ".join(str(flag) for flag in (row.get("risk_flags") or [])[:6])
+        route = ", ".join(str(item) for item in (row.get("community_skill_route") or [])[:4])
+        expression = row.get("expression")
+        suffix = f"; risks={risks}" if risks else ""
+        suffix += f"; route={route}" if route else ""
+        suffix += f"; expr={_short_expr(expression)}" if expression else "; expr=withheld"
+        lines.append(f"- {row.get('tag') or row.get('source') or 'community'}: fields={fields}{suffix}")
+    lines.extend(["", "## Community Skills"])
+    for skill in context.get("community_skills") or []:
+        risks = ", ".join(str(flag) for flag in (skill.get("top_risk_flags") or [])[:6])
+        fields = ", ".join(str(field) for field in (skill.get("top_fields") or [])[:6])
+        lines.append(
+            f"- {skill.get('skill_id')}: evidence={skill.get('record_count') or skill.get('recipe_evidence') or 0}; "
+            f"risks={risks or 'none'}; fields={fields or 'none'}; action={_short_expr(skill.get('action'), 220)}"
+        )
     lines.extend([
         "",
         "## Generation Rules",
         "- Return only valid WorldQuant BRAIN FASTEXPR expressions.",
         "- Do not copy exact ACTIVE expressions.",
         "- Prefer behaviorally different fields/operators when avoiding self-correlation.",
+        "- Do not submit unchanged community/forum templates; require transformed structure and fresh checks.",
+        "- Use near-pass skill routes for repair before spending fresh exploration budget.",
         "- Use simple, testable structures before adding complex blends.",
     ])
     return "\n".join(lines) + "\n"
@@ -2582,6 +2739,10 @@ def _summarize_rows(rows: list[dict], *, limit: int) -> list[dict]:
             "triage_reason": row.get("triage_reason"),
             "tag": row.get("tag"),
             "low_overlap_fields": row.get("low_overlap_fields"),
+            "risk_flags": row.get("risk_flags") or [],
+            "community_skill_route": row.get("community_skill_route") or row.get("community_skill_tags") or [],
+            "repair_strategy_hints": row.get("repair_strategy_hints") or [],
+            "community_skill_risk_flags": row.get("community_skill_risk_flags") or [],
         })
     return out
 
@@ -2839,11 +3000,38 @@ def _finish(paths: WorkflowPaths, config: WQAgentWorkflowConfig, mode: str, sect
         "canonical_entrypoint": "scripts/wq_agent_workflow.py",
         "authoritative_status_file": str(paths.summary),
         "bucket_counts": dict(sorted(Counter(row.get("triage_bucket") for row in review_rows).items())),
+        "community_skill_report": _workflow_community_skill_report(paths, review_rows),
         "files": {key: str(value) for key, value in asdict(paths).items() if key != "output_dir"},
         **sections,
     }
     _write_json(paths.summary, summary)
     return summary
+
+
+def _workflow_community_skill_report(paths: WorkflowPaths, review_rows: list[dict]) -> dict:
+    memory = _read_json(paths.memory_context) if paths.memory_context.is_file() else {}
+    candidate_rows = _read_jsonl(paths.candidate_pool) if paths.candidate_pool.is_file() else []
+    policy_rows = candidate_rows + review_rows
+    return {
+        "community_context_dir": memory.get("community_context_dir") or "",
+        "loaded_skill_count": memory.get("community_skill_count") or len(memory.get("community_skills") or []),
+        "loaded_skills": [row.get("skill_id") for row in (memory.get("community_skills") or [])[:12] if row.get("skill_id")],
+        "forum_policy_actions": dict(sorted(Counter(
+            row.get("forum_policy_action") for row in policy_rows if row.get("forum_policy_action")
+        ).items())),
+        "forum_policy_reasons": dict(Counter(
+            row.get("forum_policy_reason") for row in policy_rows if row.get("forum_policy_reason")
+        ).most_common(20)),
+        "community_skill_risk_flags": dict(Counter(
+            flag for row in policy_rows for flag in (row.get("community_skill_risk_flags") or [])
+        ).most_common(20)),
+        "community_skill_tags": dict(Counter(
+            tag for row in review_rows for tag in (row.get("community_skill_tags") or [])
+        ).most_common(20)),
+        "repair_strategy_hints": dict(Counter(
+            hint for row in review_rows for hint in (row.get("repair_strategy_hints") or [])
+        ).most_common(20)),
+    }
 
 
 def _api_check_status(check_result: dict, *, sc_result: Any, prod_result: Any) -> str:

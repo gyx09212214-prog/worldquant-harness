@@ -17,6 +17,11 @@ This command runs the deterministic public demo, then writes the contract artifa
 | File | Format | Purpose |
 |:--|:--|:--|
 | `harness_run.json` | JSON | Run envelope, roles, steps, artifacts, decisions, metrics |
+| `hypotheses.jsonl` | JSONL | Alpha-GPT-style hypothesis records |
+| `alpha_gpt_candidate_specs.jsonl` | JSONL | Candidate specs linked to hypothesis, placeholder template, bindings, and constraints |
+| `review_decisions.jsonl` | JSONL | Promote, retry, or reject decisions for the semantic research loop |
+| `reflection_records.jsonl` | JSONL | Memory/profile lessons proposed after evaluation |
+| `submit_evidence.json` | JSON | Explicit-submit boundary evidence; public eval records no real submit attempt |
 | `agent_trace.jsonl` | JSONL | Append-only event trace for agent state transitions |
 | `artifacts.jsonl` | JSONL | Artifact references with path, type, producer step, content hash |
 | `decisions.jsonl` | JSONL | Sandbox gate, harness gate, submit boundary decisions |
@@ -44,7 +49,22 @@ Allowed roles: `researcher`, `verifier`, `simulator`, `critic`, `reflector`, `su
 
 Fields: `event_id`, `run_id`, `event_type`, `role`, `step_id`, `candidate_uid`, `payload`, `created_at`.
 
-Allowed event types include `context_loaded`, `candidates_proposed`, `presubmit_ran`, `gate_reviewed`, `evaluated`, `reflected`, `profile_candidate_written`, `memory_delta_written`.
+Allowed event types include `context_loaded`, `hypothesis_created`, `candidates_proposed`, `candidate_specs_constrained`, `presubmit_ran`, `gate_reviewed`, `review_decision_recorded`, `evaluated`, `reflected`, `submit_evidence_recorded`, `profile_candidate_written`, `memory_delta_written`.
+
+### Alpha-GPT Semantic Records
+
+The public eval runner also writes semantic records that make the research loop
+explicit:
+
+- `AlphaGPTHypothesis`: `hypothesis_id`, `run_id`, `topic`, `statement`, `rationale`, `expected_signal`, `status`.
+- `AlphaGPTCandidateSpec`: `candidate_uid`, `hypothesis_id`, `expression`, `research_intent`, `placeholder_template`, `placeholder_bindings`, `generation_constraints`.
+- `AlphaGPTReviewDecision`: `candidate_uid`, `hypothesis_id`, `decision`, `reason`, `metrics`, `next_action`, `human_required`.
+- `AlphaGPTReflectionRecord`: `reflection_id`, `run_id`, `hypothesis_id`, `conclusion`, `memory_actions`, `profile_actions`.
+- `AlphaGPTSubmitEvidence`: `run_id`, `boundary_role`, `status`, `explicit_submit_required`, `selected_alpha_ids`, `real_submit_attempted`.
+
+All public semantic records carry `no_submit=true`. `AlphaGPTSubmitEvidence`
+uses `real_submit_attempted=false` in public eval; real submission evidence can
+only come from explicitly selected alpha IDs in separate submit runs.
 
 ### `DecisionGate`
 
@@ -74,6 +94,10 @@ Patch operations carry `auto_applied=false` in the public eval runner.
 | `duplicate_active_rejected` | one duplicate active expression reject |
 | `no_real_submit` | no real submit attempt |
 | `profile_patch_generated_not_applied` | profile patch exists and every op has `auto_applied=false` |
+| `alpha_gpt_hypothesis_written` | one structured hypothesis artifact |
+| `alpha_gpt_candidate_specs_link_hypothesis` | five candidate specs linked to the hypothesis |
+| `alpha_gpt_review_decisions_written` | promote, retry, and reject review decisions |
+| `submit_evidence_requires_explicit_submit` | submit evidence requires explicit human selection and records no public submit |
 
 These cases make the public demo a harness regression suite, not only a screenshot source.
 

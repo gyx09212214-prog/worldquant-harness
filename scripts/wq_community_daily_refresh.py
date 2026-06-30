@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         str(args.max_comments_per_post),
         "--sleep-seconds",
         str(args.sleep_seconds),
+        "--max-candidates-per-record",
+        str(args.max_candidates_per_record),
     ]
     if args.triage:
         export_cmd.extend(["--triage", "--min-score", str(args.min_score)])
@@ -81,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
             fallback_result = {"ok": False, "reason": "no fallback cache found"}
             final_status = "FAILED"
 
+    memory_result: dict[str, Any] | None = None
+    if args.triage and args.build_memory and final_status in {"LIVE_REFRESHED", "FALLBACK_TRIAGED"}:
+        memory_result = _run_memory_build(output_dir, args)
+
     manifest = {
         "schema_version": 1,
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -90,10 +96,13 @@ def main(argv: list[str] | None = None) -> int:
         "output_dir": str(output_dir),
         "export": export_result,
         "fallback": fallback_result,
+        "memory": memory_result,
         "files": {
             "posts": str(output_dir / "posts.jsonl"),
             "comments": str(output_dir / "comments.jsonl"),
             "triage": str(output_dir / "triage"),
+            "forum_memory": str(output_dir / "forum_idea_memory"),
+            "skill_memory": str(output_dir / "skill_memory"),
             "manifest": str(manifest_path),
         },
     }
@@ -123,8 +132,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--no-auth", action="store_true")
     parser.add_argument("--triage", action="store_true", default=True)
     parser.add_argument("--no-triage", dest="triage", action="store_false")
+    parser.add_argument("--build-memory", action="store_true", default=True)
+    parser.add_argument("--no-build-memory", dest="build_memory", action="store_false")
     parser.add_argument("--min-score", type=int, default=15)
     parser.add_argument("--max-candidates-per-record", type=int, default=5)
+    parser.add_argument("--top-sources", type=int, default=8)
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--max-pages", type=int, default=20)
     parser.add_argument("--max-posts", type=int, default=500)
@@ -221,6 +233,49 @@ def _run_fallback_triage(fallback_dir: Path, output_dir: Path, args: argparse.Na
     result["posts"] = str(posts)
     result["comments"] = str(comments) if comments.is_file() else ""
     return result
+
+
+def _run_memory_build(output_dir: Path, args: argparse.Namespace) -> dict[str, Any]:
+    triage_dir = output_dir / "triage"
+    forum_memory_dir = output_dir / "forum_idea_memory"
+    skill_memory_dir = output_dir / "skill_memory"
+    idea_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_wq_forum_idea_memory.py"),
+        "--triage-dir",
+        str(triage_dir),
+        "--output-dir",
+        str(forum_memory_dir),
+        "--source-label",
+        output_dir.name,
+        "--top-sources",
+        str(args.top_sources),
+    ]
+    skill_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_wq_community_skill_memory.py"),
+        "--triage-dir",
+        str(triage_dir),
+        "--output-dir",
+        str(skill_memory_dir),
+        "--forum-memory-dir",
+        str(forum_memory_dir),
+        "--source-label",
+        output_dir.name,
+        "--top-sources",
+        str(args.top_sources),
+    ]
+    idea_result = _run(idea_cmd, env=os.environ.copy())
+    skill_result: dict[str, Any] | None = None
+    if idea_result["returncode"] == 0:
+        skill_result = _run(skill_cmd, env=os.environ.copy())
+    return {
+        "ok": bool(idea_result["returncode"] == 0 and skill_result and skill_result.get("returncode") == 0),
+        "forum_idea_memory": idea_result,
+        "community_skill_memory": skill_result,
+        "forum_memory_dir": str(forum_memory_dir),
+        "skill_memory_dir": str(skill_memory_dir),
+    }
 
 
 def _resolve_fallback_dir(path_value: str, current_output_dir: Path) -> Path | None:

@@ -8,6 +8,7 @@ it never calls WQ BRAIN and never submits alphas.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import re
@@ -35,6 +36,16 @@ DIRECT_FORUM_MARKERS = ("forum_direct", "forum-direct", "community_seed", "world
 PRICE_LIQUIDITY_FIELDS = {"open", "high", "low", "close", "returns", "volume", "vwap", "adv20", "adv60", "adv120"}
 NEUTRALIZATION_FIELDS = {"industry", "subindustry", "sector"}
 RETURN_ANCHOR_FIELD = "returns"
+COMMUNITY_SKILL_HARD_BLOCK_FLAGS = {"private_code", "unknown_or_unsupported"}
+COMMUNITY_SKILL_TEMPLATE_FLAGS = {"template_clone_risk", "possible_complete_alpha"}
+COMMUNITY_SKILL_PENALIZE_FLAGS = {
+    "field_family_crowding",
+    "metric_near_pass",
+    "operator_availability_risk",
+    "platform_limit",
+    "stale_precheck_risk",
+    "unit_check",
+}
 
 
 @dataclass(frozen=True)
@@ -44,6 +55,7 @@ class ForumSubmissionOptimizerConfig:
     output_dir: Path | None = None
     obsidian_output: Path | None = None
     submitted_alpha_map_dir: Path | None = None
+    community_skill_memory_file: Path | None = None
     region: str = "USA"
     universe: str = "TOP3000"
     account: str = "primary"
@@ -55,10 +67,18 @@ class ForumSubmissionOptimizerConfig:
 
 def build_forum_submission_plan(config: ForumSubmissionOptimizerConfig) -> dict[str, Any]:
     factor_map = load_factor_map(config.factor_map_dir)
-    forum_memory = load_forum_memory(config.forum_memory_dirs)
+    forum_memory = load_forum_memory(
+        config.forum_memory_dirs,
+        extra_skill_files=(config.community_skill_memory_file,) if config.community_skill_memory_file else (),
+    )
     submitted_alpha_map = load_submitted_alpha_map(config.submitted_alpha_map_dir)
     directions = build_direction_scores(factor_map=factor_map, forum_memory=forum_memory, config=config)
-    policy = build_submission_policy(directions, config=config, submitted_alpha_map=submitted_alpha_map)
+    policy = build_submission_policy(
+        directions,
+        config=config,
+        submitted_alpha_map=submitted_alpha_map,
+        community_skills=forum_memory.get("skills") or [],
+    )
     budget = build_candidate_budget(directions, max_directions=config.max_directions)
     markdown = render_forum_submission_playbook(
         directions=directions,
@@ -76,6 +96,7 @@ def build_forum_submission_plan(config: ForumSubmissionOptimizerConfig) -> dict[
             "factor_map_dir": str(config.factor_map_dir),
             "forum_memory_dirs": [str(path) for path in config.forum_memory_dirs],
             "submitted_alpha_map_dir": str(config.submitted_alpha_map_dir) if config.submitted_alpha_map_dir else "",
+            "community_skill_memory_file": str(config.community_skill_memory_file) if config.community_skill_memory_file else "",
             "region": config.region,
             "universe": config.universe,
             "account": config.account,
@@ -87,6 +108,7 @@ def build_forum_submission_plan(config: ForumSubmissionOptimizerConfig) -> dict[
             "clusters": len(forum_memory["clusters"]),
             "recipes": len(forum_memory["recipes"]),
             "rules": len(forum_memory["rules"]),
+            "community_skills": len(forum_memory["skills"]),
             "factor_nodes": len(factor_map["nodes"]),
             "factor_domains": len(factor_map["domain_summary"]),
             "submitted_active_alphas": _nested(submitted_alpha_map, "summary", "active_or_submitted_count") or 0,
@@ -110,21 +132,31 @@ def load_factor_map(factor_map_dir: Path) -> dict[str, Any]:
     }
 
 
-def load_forum_memory(memory_dirs: tuple[Path, ...]) -> dict[str, Any]:
+def load_forum_memory(
+    memory_dirs: tuple[Path, ...],
+    *,
+    extra_skill_files: tuple[Path | None, ...] = (),
+) -> dict[str, Any]:
     clusters: list[dict[str, Any]] = []
     recipes: list[dict[str, Any]] = []
     rules: list[dict[str, Any]] = []
     combinations: list[dict[str, Any]] = []
+    skills: list[dict[str, Any]] = []
     for directory in memory_dirs:
         clusters.extend(_read_jsonl(_first_existing(directory, "forum_idea_clusters_strict.jsonl", "forum_idea_clusters.jsonl")))
         recipes.extend(_read_jsonl(directory / "forum_candidate_recipes.jsonl"))
         rules.extend(_read_jsonl(directory / "forum_pattern_rules.jsonl"))
         combinations.extend(_read_jsonl(directory / "forum_idea_theme_combinations.jsonl"))
+        skills.extend(_read_jsonl(_first_existing(directory, "community_skill_memory.jsonl", "skill_memory.jsonl")))
+        skills.extend(_read_jsonl(directory / "skill_memory" / "community_skill_memory.jsonl"))
+    for path in extra_skill_files:
+        skills.extend(_read_jsonl(path))
     return {
         "clusters": _dedupe_by_keys(clusters, ("theme_id", "title", "label")),
         "recipes": _dedupe_by_keys(recipes, ("recipe_id", "template")),
         "rules": _dedupe_by_keys(rules, ("rule_id", "logic")),
         "combinations": combinations,
+        "skills": _dedupe_by_keys(skills, ("skill_id", "action")),
     }
 
 
@@ -274,6 +306,7 @@ def build_submission_policy(
     *,
     config: ForumSubmissionOptimizerConfig,
     submitted_alpha_map: dict[str, Any] | None = None,
+    community_skills: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     theme_policies = {
         row["theme_id"]: _policy_entry(row)
@@ -301,6 +334,7 @@ def build_submission_policy(
         "crowded_domains": crowded_domains,
         "underexplored_domains": underexplored_domains,
         "submitted_alpha_map": build_submitted_alpha_policy(submitted_alpha_map),
+        "community_skill_policy": build_community_skill_policy(community_skills or []),
         "theme_policies": theme_policies,
         "recipe_policies": recipe_policies,
         "rules": {
@@ -316,6 +350,47 @@ def build_submission_policy(
                 "action": "budget_and_filter_only",
                 "reason": "Use turnover/robustness discussion to allocate simulations and stop bad families early.",
             },
+            "community_skill_risks": {
+                "action": "block_or_penalize",
+                "reason": "Use community skill memory as conservative risk routing, not as direct formula generation.",
+            },
+        },
+    }
+
+
+def build_community_skill_policy(skills: list[dict[str, Any]]) -> dict[str, Any]:
+    risk_counts: Counter[str] = Counter()
+    skill_ids: list[str] = []
+    kinds: Counter[str] = Counter()
+    recipe_ids: list[str] = []
+    for skill in skills:
+        skill_id = str(skill.get("skill_id") or "")
+        if skill_id:
+            skill_ids.append(skill_id)
+        kind = str(skill.get("memory_kind") or "")
+        if kind:
+            kinds[kind] += 1
+        if skill_id.startswith("forum_recipe::"):
+            recipe_ids.append(skill_id.removeprefix("forum_recipe::"))
+        evidence = skill.get("evidence") if isinstance(skill.get("evidence"), dict) else {}
+        for flag, count in (evidence.get("risk_counts") or {}).items():
+            risk_counts[str(flag)] += _safe_int(count) or 0
+    enabled = bool(skills)
+    return {
+        "schema_version": 1,
+        "enabled": enabled,
+        "skill_count": len(skills),
+        "skill_ids": skill_ids[:50],
+        "skill_kinds": dict(sorted(kinds.items())),
+        "recipe_ids": recipe_ids[:30],
+        "risk_counts": dict(risk_counts.most_common(40)),
+        "actions": {
+            "hard_block_flags": sorted(COMMUNITY_SKILL_HARD_BLOCK_FLAGS),
+            "template_transform_flags": sorted(COMMUNITY_SKILL_TEMPLATE_FLAGS),
+            "penalize_flags": sorted(COMMUNITY_SKILL_PENALIZE_FLAGS),
+            "template_action": "block_unless_orthogonal_overlay",
+            "near_pass_action": "repair_or_fresh_recheck_before_submit",
+            "field_family_crowding_action": "penalize_and_limit_budget",
         },
     }
 
@@ -454,6 +529,13 @@ def evaluate_candidate_policy(candidate: dict[str, Any], policy: dict[str, Any] 
         expression=expression,
         policy=policy.get("submitted_alpha_map") or {},
     )
+    community_eval = _evaluate_community_skill_constraints(
+        candidate,
+        fields=fields,
+        expression=expression,
+        policy=policy.get("community_skill_policy") or {},
+        has_orthogonal_overlay=has_orthogonal_overlay,
+    )
     base_score = _safe_float(theme_policy.get("research_priority_score")) or _safe_float(recipe_policy.get("research_priority_score")) or 25.0
     reasons: list[str] = []
     action = "allow"
@@ -467,6 +549,20 @@ def evaluate_candidate_policy(candidate: dict[str, Any], policy: dict[str, Any] 
             "domain": domain,
             "theme_id": theme_id,
             "required": "orthogonal field or operator overlay",
+            "community_skill": community_eval,
+        }
+    if community_eval.get("action") == "block":
+        return {
+            "action": "block",
+            "reason": ",".join(community_eval.get("reasons") or ["community_skill_block"]),
+            "score_adjustment": _safe_float(community_eval.get("score_adjustment")) or -100.0,
+            "domain": domain,
+            "theme_id": theme_id,
+            "recipe_id": recipe_id or None,
+            "direct_forum": is_direct_forum,
+            "orthogonal_overlay": has_orthogonal_overlay,
+            "community_skill": community_eval,
+            "submitted_alpha_constraints": submitted_eval,
         }
     if theme_id in RULE_ONLY_THEMES:
         action = "penalize"
@@ -488,6 +584,10 @@ def evaluate_candidate_policy(candidate: dict[str, Any], policy: dict[str, Any] 
         action = "penalize"
     score_adjustment += _safe_float(submitted_eval.get("score_adjustment")) or 0.0
     reasons.extend(submitted_eval.get("reasons") or [])
+    if community_eval.get("action") == "penalize" and action != "block":
+        action = "penalize"
+    score_adjustment += _safe_float(community_eval.get("score_adjustment")) or 0.0
+    reasons.extend(community_eval.get("reasons") or [])
     if base_score < _safe_float((policy.get("gates") or {}).get("low_priority_reject_below"), 15.0):
         action = "block"
         reasons.append("low_forum_direction_score")
@@ -503,6 +603,7 @@ def evaluate_candidate_policy(candidate: dict[str, Any], policy: dict[str, Any] 
         "direct_forum": is_direct_forum,
         "orthogonal_overlay": has_orthogonal_overlay,
         "submitted_alpha_constraints": submitted_eval,
+        "community_skill": community_eval,
     }
 
 
@@ -516,6 +617,8 @@ def annotate_candidate_with_policy(candidate: dict[str, Any], policy: dict[str, 
         "forum_policy": evaluation,
         "forum_policy_action": evaluation.get("action"),
         "forum_policy_reason": evaluation.get("reason"),
+        "community_skill_risk_flags": (evaluation.get("community_skill") or {}).get("risk_flags") or [],
+        "community_skill_policy_reasons": (evaluation.get("community_skill") or {}).get("reasons") or [],
         "research_priority_score": round(base_score + (_safe_float(evaluation.get("score_adjustment")) or 0.0), 4),
     }
 
@@ -569,6 +672,7 @@ def render_forum_submission_playbook(
         f"- Factor nodes: {len(factor_map.get('nodes', []))}",
         f"- Forum clusters: {len(forum_memory.get('clusters', []))}",
         f"- Forum recipes: {len(forum_memory.get('recipes', []))}",
+        f"- Community skills: {len(forum_memory.get('skills', []))}",
         f"- Submitted active alphas: {_nested(submitted_alpha_map, 'summary', 'active_or_submitted_count') or 0}",
         "- Policy: direct forum templates are blocked unless they introduce an orthogonal overlay.",
         "- Policy: returns should be a small risk/control leg, not the main anchor.",
@@ -593,6 +697,19 @@ def render_forum_submission_playbook(
         "- Forum direct snippets: block unless field/operator family changes materially.",
         "- Correlation and robustness forum themes are constraints, not standalone alpha sources.",
     ]
+    skill_policy = policy.get("community_skill_policy") or {}
+    if skill_policy.get("enabled"):
+        top_risks = list((skill_policy.get("risk_counts") or {}).keys())[:10]
+        lines.extend([
+            "",
+            "## Community Skill Gates",
+            "",
+            f"- Loaded skills: {skill_policy.get('skill_count')}",
+            f"- Skill kinds: {', '.join(f'{key}={value}' for key, value in (skill_policy.get('skill_kinds') or {}).items()) or 'none'}",
+            f"- Top risk flags: {', '.join(top_risks) or 'none'}",
+            "- Template-clone risks are blocked unless the candidate has a field/operator-family change and an orthogonal overlay.",
+            "- Near-pass and operation-attribution risks are penalized and routed to fresh checks or repair before submit.",
+        ])
     submitted_policy = policy.get("submitted_alpha_map") or {}
     if submitted_policy:
         lines.extend([
@@ -745,6 +862,98 @@ def _has_orthogonal_overlay(fields: set[str], expression: str) -> bool:
     }
     domains.discard("unknown")
     return len(domains) >= 2
+
+
+def _evaluate_community_skill_constraints(
+    candidate: dict[str, Any],
+    *,
+    fields: set[str],
+    expression: str,
+    policy: dict[str, Any],
+    has_orthogonal_overlay: bool,
+) -> dict[str, Any]:
+    if not policy or not policy.get("enabled"):
+        return {"action": "allow", "reasons": [], "score_adjustment": 0.0, "risk_flags": []}
+    risk_flags = _candidate_risk_flags(candidate)
+    reasons: list[str] = []
+    action = "allow"
+    score_adjustment = 0.0
+
+    hard_flags = risk_flags & set(_nested(policy, "actions", "hard_block_flags") or COMMUNITY_SKILL_HARD_BLOCK_FLAGS)
+    if hard_flags:
+        return {
+            "action": "block",
+            "reasons": [f"community_skill_hard_block:{flag}" for flag in sorted(hard_flags)],
+            "score_adjustment": -100.0,
+            "risk_flags": sorted(risk_flags),
+            "required": "remove unsupported/private community-derived source before simulation",
+        }
+
+    template_flags = risk_flags & set(_nested(policy, "actions", "template_transform_flags") or COMMUNITY_SKILL_TEMPLATE_FLAGS)
+    if template_flags and not has_orthogonal_overlay:
+        return {
+            "action": "block",
+            "reasons": ["template_clone_risk"],
+            "score_adjustment": -100.0,
+            "risk_flags": sorted(risk_flags),
+            "required": "field-family or operator-family change plus orthogonal overlay",
+        }
+    if template_flags:
+        action = "penalize"
+        score_adjustment -= 8.0
+        reasons.append("template_transform_required")
+
+    penalize_flags = risk_flags & set(_nested(policy, "actions", "penalize_flags") or COMMUNITY_SKILL_PENALIZE_FLAGS)
+    if penalize_flags:
+        action = "penalize" if action != "block" else action
+        score_adjustment -= min(24.0, 6.0 * len(penalize_flags))
+        reasons.extend(f"community_skill_risk:{flag}" for flag in sorted(penalize_flags))
+
+    if "metric_near_pass" in risk_flags:
+        reasons.append("near_pass_requires_repair_or_fresh_recheck")
+    if "field_family_crowding" in risk_flags:
+        reasons.append("limit_same_field_family_budget")
+
+    return {
+        "action": action,
+        "reasons": reasons,
+        "score_adjustment": round(score_adjustment, 4),
+        "risk_flags": sorted(risk_flags),
+        "field_count": len(fields),
+        "has_orthogonal_overlay": has_orthogonal_overlay,
+        "expression_hash": _stable_expression_key(expression),
+    }
+
+
+def _candidate_risk_flags(candidate: dict[str, Any]) -> set[str]:
+    flags: set[str] = set()
+    for key in ("risk_flags", "community_skill_risk_flags"):
+        value = candidate.get(key)
+        if isinstance(value, list):
+            flags.update(str(item) for item in value if item)
+        elif isinstance(value, str) and value:
+            flags.add(value)
+    meta = candidate.get("candidate_meta") if isinstance(candidate.get("candidate_meta"), dict) else {}
+    for key in ("risk_flags", "community_skill_risk_flags"):
+        value = meta.get(key)
+        if isinstance(value, list):
+            flags.update(str(item) for item in value if item)
+        elif isinstance(value, str) and value:
+            flags.add(value)
+    diagnosis = candidate.get("diagnosis") if isinstance(candidate.get("diagnosis"), dict) else {}
+    value = diagnosis.get("risk_flags")
+    if isinstance(value, list):
+        flags.update(str(item) for item in value if item)
+    elif isinstance(value, str) and value:
+        flags.add(value)
+    return flags
+
+
+def _stable_expression_key(expression: str) -> str:
+    compact = re.sub(r"\s+", " ", expression or "").strip().lower()
+    if not compact:
+        return ""
+    return hashlib.sha256(compact.encode("utf-8")).hexdigest()[:16]
 
 
 def _evaluate_submitted_alpha_constraints(

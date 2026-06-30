@@ -4,6 +4,9 @@ from pathlib import Path
 import pytest
 
 from worldquant_harness.harness_contracts import (
+    AlphaGPTCandidateSpec,
+    AlphaGPTHypothesis,
+    AlphaGPTSubmitEvidence,
     HarnessEvent,
     ProfilePatch,
     artifact_ref,
@@ -42,6 +45,39 @@ def test_profile_patch_requires_no_submit_true():
 
     with pytest.raises(ValueError, match="no_submit"):
         patch.to_dict()
+
+
+def test_alpha_gpt_semantic_contracts_require_no_submit_boundary():
+    hypothesis = AlphaGPTHypothesis(
+        hypothesis_id="h1",
+        run_id="r1",
+        topic="demo",
+        statement="test a constrained hypothesis",
+    ).to_dict()
+    candidate = AlphaGPTCandidateSpec(
+        candidate_uid="c1",
+        hypothesis_id="h1",
+        expression="rank(close)",
+        placeholder_template="rank(DATA_FIELD1)",
+        placeholder_bindings={"DATA_FIELD1": "close"},
+    ).to_dict()
+    submit_evidence = AlphaGPTSubmitEvidence(
+        run_id="r1",
+        boundary_role="terminal_evidence_source",
+        status="not_attempted_in_public_eval",
+    ).to_dict()
+
+    assert hypothesis["no_submit"] is True
+    assert candidate["placeholder_bindings"]["DATA_FIELD1"] == "close"
+    assert submit_evidence["explicit_submit_required"] is True
+
+    with pytest.raises(ValueError, match="real submit"):
+        AlphaGPTSubmitEvidence(
+            run_id="r1",
+            boundary_role="terminal_evidence_source",
+            status="attempted",
+            real_submit_attempted=True,
+        ).to_dict()
 
 
 def test_jsonl_roundtrip_validates_contract_payload(tmp_path: Path):

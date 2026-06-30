@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -13,6 +14,7 @@ from worldquant_harness.wq_auto_mining import (
     diagnose_wq_result,
     extract_wq_metrics,
     generate_child_expressions,
+    load_dotenv,
     write_json,
 )
 
@@ -112,6 +114,16 @@ def test_write_json_retries_transient_replace_permission_error(workdir, monkeypa
 
     assert calls["count"] == 1
     assert json.loads(target.read_text(encoding="utf-8")) == {"status": "RUNNING"}
+
+
+def test_load_dotenv_handles_utf8_bom_key(workdir, monkeypatch):
+    env_file = workdir / ".env"
+    env_file.write_text("\ufeffWQ_BOM_TEST=value\n", encoding="utf-8")
+    monkeypatch.delenv("WQ_BOM_TEST", raising=False)
+
+    load_dotenv(workdir)
+
+    assert os.environ["WQ_BOM_TEST"] == "value"
 
 
 def _community_context_dir(workdir: Path) -> Path:
@@ -272,6 +284,36 @@ def test_auto_miner_appends_community_seeds_after_user_candidates(workdir):
     assert checkpoint["community_context"]["loaded"] is True
 
 
+def test_auto_miner_route_only_default_does_not_append_community_seeds(workdir):
+    candidates_file = workdir / "candidates.jsonl"
+    candidates_file.write_text('{"expression": "rank(close)", "tag": "seed"}\n', encoding="utf-8")
+    context_dir = _community_context_dir(workdir)
+    config = _config(
+        workdir,
+        candidates_file,
+        community_context_dir=context_dir,
+        community_context_mode="auto",
+        target_submissions=0,
+        max_runs=1,
+        max_rounds=2,
+    )
+
+    miner = WQAutoMiner(
+        config,
+        client_factory=lambda account: FakeClient(),
+        configured_check=lambda account: True,
+        simulation_fn=lambda _client, expression, **_kwargs: _result(expression),
+        child_generator=lambda *args, **kwargs: [],
+    )
+
+    assert miner.run() == 0
+
+    checkpoint = json.loads(config.checkpoint_file.read_text(encoding="utf-8"))
+    assert checkpoint["queue"] == []
+    assert checkpoint["community_context"]["loaded"] is True
+    assert checkpoint["counters"]["community_seeds_added"] == 0
+
+
 def test_auto_miner_passes_retrieved_community_context_to_child_generator(workdir):
     candidates_file = workdir / "candidates.jsonl"
     candidates_file.write_text('{"expression": "rank(volume)", "tag": "seed"}\n', encoding="utf-8")
@@ -303,6 +345,8 @@ def test_auto_miner_passes_retrieved_community_context_to_child_generator(workdi
     assert miner.run() == 0
     assert "Community-derived reference notes" in captured["community_context"]
     assert "Price-volume correlation" in captured["community_context"]
+    assert "rank(ts_corr(close, volume, 10))" not in captured["community_context"]
+    assert "derived templates withheld" in captured["community_context"]
 
 
 def test_auto_miner_community_context_off_keeps_old_seed_queue(workdir):

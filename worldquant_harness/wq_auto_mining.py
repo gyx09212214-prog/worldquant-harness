@@ -89,7 +89,7 @@ class WQAutoMiningConfig:
     fields_file: Path | None = None
     community_context_dir: Path | None = None
     community_context_mode: str = "auto"
-    community_seed_limit: int = 12
+    community_seed_limit: int = 0
 
 
 def load_dotenv(root: Path | None = None) -> None:
@@ -97,12 +97,12 @@ def load_dotenv(root: Path | None = None) -> None:
     env_file = root / ".env"
     if not env_file.is_file():
         return
-    for line in env_file.read_text(encoding="utf-8").splitlines():
+    for line in env_file.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        key = key.strip()
+        key = key.strip().lstrip("\ufeff")
         value = value.strip()
         if key and value and not os.environ.get(key):
             os.environ[key] = value

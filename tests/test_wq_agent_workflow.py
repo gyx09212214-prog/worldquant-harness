@@ -567,8 +567,70 @@ def test_no_model_postmortem_writes_deterministic_repair_candidates(workdir):
 
     repairs = _read_jsonl(run_dir / "repair_queue.jsonl")
     assert summary["postmortem"]["model_repairs"]["reason"] == "deterministic_policy_repair"
+    assert "community::near_pass_repair" in repairs[0]["community_skill_tags"]
+    assert "near_pass_self_corr" in repairs[0]["skill_failure_tags"]
+    assert "change_field_or_operator_family_before_window_tuning" in repairs[0]["repair_strategy_hints"]
     assert repairs[0]["candidate_expressions"]
     assert any("pcr_oi_60" in expression for expression in repairs[0]["candidate_expressions"])
+
+
+def test_workflow_memory_context_loads_community_skills(workdir):
+    triage = workdir / "community" / "triage"
+    _write_jsonl(
+        triage / "triage_records.jsonl",
+        [{
+            "post_id": "p1",
+            "title": "Near pass",
+            "hypothesis": "Self-correlation near pass should change field family.",
+            "relevance_score": 90,
+            "experience_category": "near_pass_repair",
+            "risk_flags": ["metric_near_pass", "correlation_risk"],
+            "wq_fields": ["returns"],
+            "operators": ["rank"],
+        }],
+    )
+    _write_jsonl(
+        triage / "community_wq_candidates.jsonl",
+        [{
+            "expression": "rank(ts_rank(returns, 20))",
+            "tag": "community-near-pass",
+            "relevance_score": 90,
+            "experience_category": "near_pass_repair",
+            "risk_flags": ["metric_near_pass", "correlation_risk"],
+        }],
+    )
+    _write_jsonl(
+        triage.parent / "skill_memory" / "community_skill_memory.jsonl",
+        [{
+            "skill_id": "community::near_pass_repair",
+            "memory_kind": "community_near_pass_repair_skill",
+            "action": "Repair near pass before fresh exploration.",
+            "evidence": {"record_count": 4, "risk_counts": {"metric_near_pass": 4}},
+        }],
+    )
+
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "community_skill_memory_run",
+        community_context_dir=triage,
+        no_model=True,
+        dry_run=True,
+        target_candidates=1,
+        max_simulations=0,
+        fallback_template_limit=0,
+        use_ledger=False,
+    )
+    summary = run_workflow(config, mode="run", dependencies={"list_alphas": lambda config: []})
+
+    memory = json.loads((config.output_dir / "memory_context.json").read_text(encoding="utf-8"))
+    assert summary["memory_context"]["community_skills"] == 1
+    assert memory["community_skills"][0]["skill_id"] == "community::near_pass_repair"
+    opportunities = _read_jsonl(config.output_dir / "field_opportunities.jsonl")
+    assert opportunities[0]["community_skill_route"] == ["community::near_pass_repair", "community::submission_gate"]
+    assert "expression" not in opportunities[0]
+    assert opportunities[0]["source_expression_hash"]
+    memory_markdown = (config.output_dir / "memory_context.md").read_text(encoding="utf-8")
+    assert "rank(ts_rank(returns, 20))" not in memory_markdown
+    assert "expr=withheld" in memory_markdown
 
 
 def test_candidate_settings_variants_are_not_deduped(workdir):
@@ -1484,6 +1546,63 @@ def test_presubmit_candidate_filter_applies_submission_policy(workdir):
     assert summary["skip_reasons"] == {"forum_direct_template_risk": 1}
     assert kept[0]["tag"] == "cashflow-overlay"
     assert kept[0]["forum_policy_action"] == "allow"
+
+
+def test_presubmit_candidate_filter_applies_community_skill_policy(workdir):
+    policy_file = workdir / "submission_policy.json"
+    policy_file.write_text(json.dumps({
+        "gates": {"low_priority_reject_below": 15.0},
+        "crowded_domains": [],
+        "underexplored_domains": [],
+        "theme_policies": {},
+        "recipe_policies": {},
+        "community_skill_policy": {
+            "enabled": True,
+            "actions": {
+                "hard_block_flags": ["private_code"],
+                "template_transform_flags": ["template_clone_risk"],
+                "penalize_flags": ["field_family_crowding"],
+            },
+        },
+    }), encoding="utf-8")
+    candidate_file = workdir / "candidate_pool.jsonl"
+    _write_jsonl(
+        candidate_file,
+        [
+            {
+                "expression": "rank(ts_rank(volume, 20))",
+                "tag": "public-template",
+                "risk_flags": ["template_clone_risk"],
+            },
+            {
+                "expression": "rank(ts_rank(cashflow_op / cap, 80) - ts_rank(returns, 20))",
+                "tag": "crowded-overlay",
+                "risk_flags": ["field_family_crowding"],
+            },
+        ],
+    )
+    config = WQAgentWorkflowConfig(
+        output_dir=workdir / "presubmit_skill_policy",
+        submission_policy_file=policy_file,
+        max_virtual_family_count=10,
+        max_virtual_field_signature_count=10,
+    )
+
+    summary = _filter_candidate_pool_for_presubmit(
+        candidate_file,
+        skip_normalized_expressions=set(),
+        active_rows=[],
+        config=config,
+    )
+
+    kept = _read_jsonl(candidate_file)
+    assert summary["kept"] == 1
+    assert summary["skip_reasons"] == {"template_clone_risk": 1}
+    assert summary["policy_actions"] == {"block": 1, "penalize": 1}
+    assert summary["community_skill_risk_flags"] == {"template_clone_risk": 1, "field_family_crowding": 1}
+    assert kept[0]["tag"] == "crowded-overlay"
+    assert kept[0]["forum_policy_action"] == "penalize"
+    assert kept[0]["community_skill_risk_flags"] == ["field_family_crowding"]
 
 
 def test_presubmit_candidate_filter_blocks_sparse_group_distribution_risk(workdir):
