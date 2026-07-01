@@ -17,6 +17,7 @@ Agent generates candidates -> harness records, gates, evaluates, remembers, and 
 [Visual Guide](docs/VISUAL_GUIDE.md) ·
 [Public Demo](docs/PUBLIC_HARNESS_DEMO.md) ·
 [Alpha-GPT Harness](docs/ALPHA_GPT_HARNESS.md) ·
+[Alpha Search Memory](docs/WQ_ALPHA_SEARCH_MEMORY.md) ·
 [Harness Contract](docs/AGENT_HARNESS_CONTRACT.md) ·
 [Agent Roles](docs/AGENT_ROLES.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
@@ -36,6 +37,8 @@ Agent generates candidates -> harness records, gates, evaluates, remembers, and 
 worldquant-harness is not a one-shot alpha generator. It is an explicit-submit, memory-driven Alpha-GPT-style research harness for WorldQuant-oriented alpha workflows.
 
 The agent can propose hypotheses, candidate specs, batches, and reviews. The harness owns the lifecycle: candidate identity, sandbox execution, no-submit gates, review queues, rejection reasons, historical memory, profile evolution, and the explicit boundary before any real WQ BRAIN action.
+
+中文摘要：本项目不是一次性的 alpha 生成器，而是一个带显式提交边界、可复盘记忆、可审阅工件的 WorldQuant 风格研究 harness。Agent 可以提出假设和候选，但真实提交必须由人工明确选择。
 
 This project is not affiliated with or endorsed by WorldQuant or WorldQuant BRAIN. Review [Disclaimer](DISCLAIMER.md), [Security](SECURITY.md), and [Responsible Use](docs/SECURITY_AND_LIMITATIONS.md) before connecting credentials or publishing artifacts.
 
@@ -65,6 +68,10 @@ worldquant-harness treats factor mining as a controlled research loop:
 | Harness control plane | Assigns stable candidate identity, runs sandbox evaluation, applies presubmit gates, and builds a review queue |
 | Memory and evolution | Converts lifecycle events, rejection reasons, reference context, and harness scores into next-run constraints |
 | Submit boundary | Keeps public demo and sandbox paths no-submit by default; real WQ BRAIN submission requires credentials and an explicit command |
+
+The 2026-07 update adds a semantic Alpha-GPT layer above the existing harness: hypothesis records, constrained candidate specs, review decisions, reflection memory, and explicit submit evidence are now first-class artifacts. Community triage and local WQ run history are converted into reusable skill memory instead of staying in chat context.
+
+中文架构说明：新的设计把系统拆成三层：底层 harness contract 管生命周期和 no-submit 边界；Alpha-GPT 语义层管假设、候选规格、审阅和反思；memory 层把社区经验和本地运行轨迹转成可复用的 skills、repair queue 和 submit/check queue。
 
 The default public path does not submit anything. Real WQ BRAIN actions require explicit credentials and explicit submission commands.
 
@@ -109,6 +116,40 @@ python scripts/wq_alpha_gpt_workflow.py demo --topic "analyst revision momentum"
 It writes hypothesis, placeholder template, candidate spec, local validation,
 review queue, reflection memory, profile patch, and submit-evidence artifacts
 under `reports/examples/alpha_gpt_demo/`.
+
+## 2026-07 Update / 本次更新
+
+This branch adds the first full Alpha-GPT-style memory workflow. The important change is architectural: research state now moves through explicit semantic records instead of remaining as loose prompt text.
+
+本次更新的重点是把研究过程结构化：从研究假设、候选生成、审阅决策、失败记忆、profile patch 到显式提交证据，每一步都有可审计 artifact。
+
+| Area | What changed |
+|:--|:--|
+| Alpha-GPT harness | Adds `hypotheses.jsonl`, `alpha_gpt_candidate_specs.jsonl`, `review_decisions.jsonl`, `reflection_records.jsonl`, and `submit_evidence.json` to the public contract path |
+| Community skill memory | Converts WQ Community triage and forum memory into reusable gates and repair routes |
+| WQ alpha search memory | Merges local simulation/check/submit artifacts into a trajectory ledger, family scores, near-pass repair queue, and submit/check target queues |
+| Explicit submit loop | Adds a local candidate-file driven simulation/submit script; it still requires credentials and explicit non-`--no-submit` execution |
+| Code review cleanup | Consolidates JSON artifact helpers for the new memory workflow and tightens configuration-driven scoring behavior |
+
+Key reusable skills / 关键 skills:
+
+| Skill | Role |
+|:--|:--|
+| `community::near_pass_repair` | Repair near-pass candidates before spending fresh exploration budget |
+| `community::alpha_template_transform` | Treat forum templates as grammar only; require transformed fields/operators before simulation |
+| `community::operation_attribution` | Map turnover, unit, field, operator, and platform-limit failures to repair actions |
+| `community::submission_gate` | Gate stale checks, direct templates, crowded fields, and unsupported operators before submit |
+| `near_sc_cutoff_settings_repair` | Freeze a strong parent expression and vary neutralization/decay/truncation near SELF_CORRELATION cutoff |
+| `top5_high_score_low_corr_submit` | Rank explicit submit/check work by WQ score, eligibility, and correlation risk |
+
+Update commits on this branch:
+
+| Commit | Purpose |
+|:--|:--|
+| `485a58d feat: add alpha-gpt harness memory workflow` | Adds the Alpha-GPT semantic artifacts, community skill memory, alpha search memory, docs, scripts, and tests |
+| `chore: document and tidy alpha-gpt harness workflow` | Documents the new design in this README and performs focused review cleanup before pushing to GitHub |
+
+For details, see [Alpha-GPT Harness](docs/ALPHA_GPT_HARNESS.md), [Alpha Search Memory](docs/WQ_ALPHA_SEARCH_MEMORY.md), and [WQ Workflow](docs/WQ_WORKFLOW.md).
 
 ## Visual Pack
 
@@ -167,9 +208,9 @@ The executable contract is implemented through `HarnessRun`, `HarnessStep`, `Har
 | Area | Capability |
 |:--|:--|
 | Harness orchestration | Public no-submit eval, sandbox experiments, presubmit gates, lifecycle traces |
-| Memory | History ingest, blocker signatures, factor-family stats, profile evolution |
+| Memory | History ingest, blocker signatures, community skills, trajectory ledgers, factor-family stats, profile evolution |
 | Agent access | MCP tools, CLI scripts, REST API, monitoring UI |
-| Review | Quality review dashboards, submit efficiency reports, ready/rejected queues |
+| Review | Quality review dashboards, Alpha-GPT review decisions, submit efficiency reports, ready/rejected queues |
 | WQ boundary | Check-only inspection and explicit credentialed submission commands |
 | Local research | Local parser, backtest, anti-overfit checks, walk-forward validation |
 

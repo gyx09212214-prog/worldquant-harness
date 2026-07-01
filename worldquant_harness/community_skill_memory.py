@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_json
+from .artifact_io import write_jsonl as _write_jsonl
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT_DIRNAME = "skill_memory"
@@ -53,9 +56,8 @@ def build_community_skill_memory(config: CommunitySkillMemoryConfig) -> dict[str
     }
     _write_jsonl(files["skills"], skills)
     files["report"].write_text(_render_report(manifest, skills), encoding="utf-8")
-    files["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     manifest["files"] = {key: str(value) for key, value in files.items()}
-    files["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    write_json(files["manifest"], manifest)
     return manifest
 
 
@@ -391,30 +393,6 @@ def _read_forum_memory(directories: tuple[Path, ...]) -> dict[str, list[dict[str
     return out
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            rows.append(value)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-
-
 def _first_existing(directory: Path, *names: str) -> Path:
     for name in names:
         path = directory / name
@@ -444,7 +422,3 @@ def _short(value: Any, limit: int) -> str:
 
 def _stable_id(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-
-
-def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")

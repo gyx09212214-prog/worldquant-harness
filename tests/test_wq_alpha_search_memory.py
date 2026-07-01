@@ -154,3 +154,57 @@ def test_alpha_search_memory_builds_repair_queue_and_skills():
         assert (output / "alpha_search_report.md").is_file()
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_alpha_search_memory_uses_configured_high_score_and_sc_thresholds():
+    workdir = _workdir()
+    try:
+        reports = workdir / "reports"
+        output = workdir / "alpha_search"
+        _write_jsonl(reports / "run_a" / "simulation_results.jsonl", [
+            {
+                "alpha_id": "alpha_near_default_only",
+                "expression": "rank(ts_rank(vwap / close, 20))",
+                "tag": "near-default",
+                "source_family": "test_family",
+                "metrics": {
+                    "sharpe": 2.4,
+                    "fitness": 1.42,
+                    "returns": 0.12,
+                    "turnover": 0.25,
+                },
+                "simulation_settings": {
+                    "neutralization": "INDUSTRY",
+                    "decay": 4,
+                    "truncation": 0.03,
+                },
+            }
+        ])
+        _write_jsonl(reports / "run_a" / "check_results.jsonl", [
+            {
+                "alpha_id": "alpha_near_default_only",
+                "api_check_status": "self_correlation_fail",
+                "sc_result": "FAIL",
+                "sc_value": 0.7332,
+                "review_failure_kind": "self_correlation",
+            }
+        ])
+
+        result = build_alpha_search_memory(WQAlphaSearchMemoryConfig(
+            reports_dir=reports,
+            output_dir=output,
+            min_high_score=1.5,
+            sc_min=0.75,
+            sc_max=0.82,
+        ))
+
+        ledger = _read_jsonl(output / "trajectory_ledger.jsonl")
+        row = next(item for item in ledger if item["alpha_id"] == "alpha_near_default_only")
+
+        assert row["is_high_score"] is False
+        assert row["is_near_sc_repair_parent"] is False
+        assert result["summary"]["funnel"]["high_score_count"] == 0
+        assert result["summary"]["funnel"]["near_sc_repair_parent_count"] == 0
+        assert _read_jsonl(output / "near_pass_repair_candidates.jsonl") == []
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)

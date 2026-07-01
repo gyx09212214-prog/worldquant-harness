@@ -87,9 +87,11 @@ def test_build_community_skill_memory_groups_experience_categories(tmp_path):
         CommunitySkillMemoryConfig(triage_dir=triage, output_dir=output, forum_memory_dirs=(forum,))
     )
     skills = _read_jsonl(output / "community_skill_memory.jsonl")
+    manifest_on_disk = json.loads((output / "community_skill_manifest.json").read_text(encoding="utf-8"))
     skill_ids = {row["skill_id"] for row in skills}
 
     assert manifest["skill_count"] == len(skills)
+    assert manifest_on_disk["files"]["skills"].endswith("community_skill_memory.jsonl")
     assert "community::near_pass_repair" in skill_ids
     assert "community::alpha_template_transform" in skill_ids
     assert "community::operation_attribution" in skill_ids

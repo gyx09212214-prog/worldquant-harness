@@ -7,10 +7,13 @@ import json
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_json
+from .artifact_io import write_jsonl as _write_jsonl
 from .expression_parser import extract_components, normalize_expression
 from .wq_brain_service import submit_threshold_checks
 
@@ -70,7 +73,7 @@ def build_alpha_search_memory(config: WQAlphaSearchMemoryConfig) -> dict[str, An
 
     artifacts = _artifact_paths(config)
     events = _load_events(artifacts, limit=config.record_limit)
-    trajectories = _merge_trajectory_events(events)
+    trajectories = _merge_trajectory_events(events, config=config)
     family_scores = _family_scores(trajectories, config=config)
     near_pass_candidates = generate_near_pass_repair_candidates(trajectories, config=config)
     active_expression_hashes = {
@@ -112,10 +115,7 @@ def build_alpha_search_memory(config: WQAlphaSearchMemoryConfig) -> dict[str, An
     }
     _write_jsonl(Path(files["trajectory_ledger"]), trajectories)
     _write_jsonl(Path(files["skill_memory"]), skill_memory)
-    Path(files["family_scores"]).write_text(
-        json.dumps(family_scores, ensure_ascii=False, indent=2, default=str) + "\n",
-        encoding="utf-8",
-    )
+    write_json(files["family_scores"], family_scores)
     _write_jsonl(Path(files["near_pass_repair_candidates"]), near_pass_candidates)
     _write_jsonl(Path(files["top_submit_targets"]), top_submit_targets)
     _write_jsonl(Path(files["top_check_targets"]), top_check_targets)
@@ -134,10 +134,7 @@ def build_alpha_search_memory(config: WQAlphaSearchMemoryConfig) -> dict[str, An
         "summary": summary,
         "files": files,
     }
-    Path(files["summary"]).write_text(
-        json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n",
-        encoding="utf-8",
-    )
+    write_json(files["summary"], result)
     Path(files["markdown"]).write_text(render_alpha_search_report(result), encoding="utf-8")
     return result
 
@@ -442,7 +439,11 @@ def _normalize_event(
     }
 
 
-def _merge_trajectory_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _merge_trajectory_events(
+    events: list[dict[str, Any]],
+    *,
+    config: WQAlphaSearchMemoryConfig,
+) -> list[dict[str, Any]]:
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in events:
         key = _trajectory_key(event)
@@ -515,7 +516,7 @@ def _merge_trajectory_events(events: list[dict[str, Any]]) -> list[dict[str, Any
             "last_seen_at": rows[-1].get("created_at"),
             "created_at": _now(),
         }
-        trajectory["is_high_score"] = (_safe_float(trajectory.get("wq_score")) or -999.0) >= 1.0
+        trajectory["is_high_score"] = (_safe_float(trajectory.get("wq_score")) or -999.0) >= config.min_high_score
         trajectory["platform_metric_gate"] = submit_threshold_checks({
             "sharpe": trajectory.get("sharpe"),
             "fitness": trajectory.get("fitness"),
@@ -525,7 +526,7 @@ def _merge_trajectory_events(events: list[dict[str, Any]]) -> list[dict[str, Any
         trajectory["submit_priority"] = _submit_priority(trajectory)
         trajectory["is_near_sc_repair_parent"] = _is_near_sc_repair_parent(
             trajectory,
-            config=WQAlphaSearchMemoryConfig(reports_dir=Path("."), output_dir=Path(".")),
+            config=config,
         )
         trajectories.append(trajectory)
 
@@ -1378,29 +1379,6 @@ def _nested(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
     return value
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        text = line.strip()
-        if not text or not text.startswith("{"):
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in rows),
-        encoding="utf-8",
-    )
-
-
 def _dedupe_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen = set()
@@ -1417,7 +1395,3 @@ def _dedupe_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         out.append(row)
     return out
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
