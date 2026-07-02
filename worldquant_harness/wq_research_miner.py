@@ -7,19 +7,48 @@ The output is intended to be fed into ``wq_agent_workflow.py presubmit-sequentia
 
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .alpha_tracker import compute_similarity
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_jsonish_rows_many as _read_jsonish_rows_many
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
+from .record_utils import safe_float as _safe_float
 from .wq_auto_mining import validate_wq_expression
 from .wq_brain_service import submit_threshold_checks
+from .wq_expression_utils import expression_components
+from .wq_expression_utils import field_signature as expression_field_signature
+from .wq_expression_utils import strip_outer_rank as _strip_outer_rank
+from .wq_failure_taxonomy import canonical_failure_kind as taxonomy_canonical_failure_kind
+from .wq_failure_taxonomy import failed_check_names
+from .wq_field_groups import (
+    GROUP_DISTRIBUTION_OPERATORS,
+    GROUP_FIELDS,
+    PRICE_VOLUME_DISPERSION_FIELDS,
+)
+from .wq_field_groups import (
+    RESEARCH_SPARSE_CONCENTRATION_FIELDS as SPARSE_CONCENTRATION_FIELDS,
+)
+from .wq_field_groups import (
+    field_used_as_denominator as _field_used_as_denominator,
+)
+from .wq_field_groups import (
+    is_broad_dispersion_field as _shared_is_broad_dispersion_field,
+)
+from .wq_field_groups import (
+    is_price_volume_dispersion_field as _is_price_volume_dispersion_field,
+)
+from .wq_field_groups import (
+    is_sparse_concentration_field as _shared_is_sparse_concentration_field,
+)
 from .wq_forum_submission_optimizer import annotate_candidate_with_policy, load_submission_policy
 from .wq_legal_inputs import load_optional_legal_input_registry
+from .wq_similarity import nearest_similarity
 
 INVALID_WQ_FIELDS = {
     "short_interest",
@@ -61,38 +90,6 @@ PLATFORM_BLOCKER_COMMON_FIELDS = {
     "range",
 }
 
-SPARSE_CONCENTRATION_FIELDS = {
-    "actual_dividend_value_quarterly",
-    "cashflow_op",
-    "dividends_to_gross_profit",
-    "enterprise_value",
-}
-SPARSE_CONCENTRATION_PREFIXES = ("pcr_",)
-GROUP_DISTRIBUTION_OPERATORS = {
-    "group_neutralize",
-    "group_rank",
-    "group_zscore",
-}
-GROUP_FIELDS = {"industry", "sector", "subindustry", "market"}
-BROAD_DISPERSION_FIELDS = {
-    "adv20",
-    "cap",
-    "close",
-    "high",
-    "low",
-    "open",
-    "volume",
-    "vwap",
-    "forward_book_value_to_price",
-    "forward_cash_flow_to_price",
-    "forward_sales_to_price",
-    "coefficient_variation_fy1_eps",
-    "credit_risk_premium_indicator",
-    "earnings_certainty_rank_derivative",
-    "relative_valuation_rank_derivative",
-}
-BROAD_DISPERSION_DATASETS = {"model16", "model77"}
-PRICE_VOLUME_DISPERSION_FIELDS = {"adv20", "close", "high", "low", "open", "volume", "vwap"}
 FRESH_ANCHOR_EXCLUDE_FIELDS = PRICE_VOLUME_DISPERSION_FIELDS | GROUP_FIELDS | {
     "returns",
     "cap",
@@ -365,7 +362,6 @@ def build_platform_self_correlation_memory(
 
 
 def infer_failure_kind(row: dict, *, similarity_cutoff: float = 0.65) -> str:
-    reason = str(row.get("presubmit_reject_reason") or row.get("triage_reason") or row.get("status") or "").lower()
     api_status = str(row.get("api_check_status") or "").lower()
     if not api_status and isinstance(row.get("live_precheck"), dict):
         live_failure = str(row["live_precheck"].get("failure_kind") or "").lower()
@@ -376,26 +372,26 @@ def infer_failure_kind(row: dict, *, similarity_cutoff: float = 0.65) -> str:
     sc_value = _safe_float(row.get("sc_value"))
     if sc_value is None:
         sc_value = _row_self_correlation_value(row)
-    nearest = _safe_float(row.get("nearest_similarity"))
-    failed_checks = [str(item.get("name") or "").upper() for item in row.get("failed_platform_checks") or []]
-
-    if sc_value is not None and sc_value >= 0.7:
+    failed_checks = failed_check_names(row)
+    canonical = taxonomy_canonical_failure_kind(
+        row,
+        api_status=api_status,
+        sc_value=sc_value,
+        similarity_cutoff=similarity_cutoff,
+    )
+    if canonical == "self_correlation_fail":
         return "self_correlation_high"
-    if "self_correlation" in reason or api_status == "self_correlation_fail":
-        return "self_correlation_high"
-    if nearest is not None and nearest > similarity_cutoff:
+    if canonical == "high_similarity":
         return "high_similarity"
-    if "too_similar" in reason or "duplicate" in reason:
-        return "high_similarity"
+    if canonical == "prod_correlation_fail":
+        return "prod_correlation_fail"
     if failed_checks:
-        if any(name in {"CONCENTRATED_WEIGHT", "LOW_SUB_UNIVERSE_SHARPE", "LOW_SUB_UNIVERSE_FITNESS"} for name in failed_checks):
+        if canonical in {"concentrated_weight", "sub_universe_fail"}:
             return "platform_distribution_fail"
         return "platform_check_fail"
     if not submit_threshold_checks({"sharpe": row.get("sharpe"), "fitness": row.get("fitness"), "turnover": row.get("turnover")})["eligible"]:
         return "base_metric_fail"
-    if api_status == "prod_correlation_fail" or "prod_correlation" in reason:
-        return "prod_correlation_fail"
-    return str(row.get("presubmit_reject_reason") or row.get("status") or "unknown_failure")
+    return canonical or str(row.get("presubmit_reject_reason") or row.get("status") or "unknown_failure")
 
 
 def build_candidate_drafts(
@@ -677,28 +673,8 @@ def _candidate_priority_sort_key(row: dict) -> tuple:
     )
 
 
-def nearest_similarity(expression: str, rows: list[dict]) -> dict | None:
-    nearest = None
-    normalized = normalize_expression(expression)
-    for row in rows:
-        other = str(row.get("expression") or "")
-        if not other:
-            continue
-        similarity = compute_similarity(expression, other)
-        item = {
-            "alpha_id": row.get("alpha_id"),
-            "expression": other,
-            "status": row.get("status"),
-            "similarity": similarity,
-            "exact": normalized == normalize_expression(other),
-        }
-        if nearest is None or similarity.get("overall_similarity", 0.0) > nearest["similarity"].get("overall_similarity", 0.0):
-            nearest = item
-    return nearest
-
-
 def field_signature(expression: str) -> str:
-    return "|".join(sorted(components_for(expression)["fields"]))
+    return expression_field_signature(expression)
 
 
 def _fresh_anchor_field_count(expression: str) -> int:
@@ -886,12 +862,7 @@ def _fresh_anchor_submission_risk(
 
 
 def _is_sparse_concentration_field(field: str) -> bool:
-    text = str(field or "")
-    if text in SPARSE_CONCENTRATION_FIELDS:
-        return True
-    if any(text.startswith(prefix) for prefix in SPARSE_CONCENTRATION_PREFIXES):
-        return True
-    return "dividend" in text
+    return _shared_is_sparse_concentration_field(field, sparse_fields=SPARSE_CONCENTRATION_FIELDS)
 
 
 def _group_distribution_operator_count(expression: str, components: dict[str, set[str]]) -> int:
@@ -918,32 +889,8 @@ def _field_coverage(spec: dict[str, Any] | None) -> float | None:
     return _safe_float(spec.get("coverage"))
 
 
-def _field_used_as_denominator(expression: str, field: str) -> bool:
-    compact = re.sub(r"\s+", "", str(expression or "").lower())
-    escaped_field = re.escape(str(field or "").lower())
-    return bool(re.search(rf"/(?:ts_backfill\()?{escaped_field}\b", compact))
-
-
 def _is_broad_dispersion_field(field: str, spec: dict[str, Any] | None) -> bool:
-    text = str(field or "")
-    if text in GROUP_FIELDS or text == "returns" or _is_sparse_concentration_field(text):
-        return False
-    if text in BROAD_DISPERSION_FIELDS or re.fullmatch(r"adv\d+", text or ""):
-        return True
-    if not isinstance(spec, dict):
-        return False
-    coverage = _field_coverage(spec)
-    if coverage is not None and coverage < 0.9:
-        return False
-    dataset = str(spec.get("dataset_id") or "")
-    domain = str(spec.get("domain") or "")
-    category = str(spec.get("category") or "")
-    return dataset in BROAD_DISPERSION_DATASETS or domain in {"pv", "core", "model"} or category in {"pv", "model"}
-
-
-def _is_price_volume_dispersion_field(field: str) -> bool:
-    text = str(field or "")
-    return text in PRICE_VOLUME_DISPERSION_FIELDS or bool(re.fullmatch(r"adv\d+", text or ""))
+    return _shared_is_broad_dispersion_field(field, spec=spec, sparse_fields=SPARSE_CONCENTRATION_FIELDS)
 
 
 def platform_blocker_match(
@@ -985,14 +932,7 @@ def platform_blocker_match(
 
 
 def components_for(expression: str) -> dict[str, set[str]]:
-    try:
-        parts = extract_components(expression or "")
-    except Exception:
-        return {"fields": set(), "operators": set()}
-    return {
-        "fields": {str(item) for item in parts.get("fields", set())},
-        "operators": {str(item) for item in parts.get("operators", set())},
-    }
+    return expression_components(expression)
 
 
 def _unsafe_expression_reason(expression: str) -> str | None:
@@ -2116,22 +2056,6 @@ def _row_family(row: dict) -> str:
     return str(row.get("source_family") or row.get("mutation_strategy") or (row.get("candidate_meta") or {}).get("source_family") or "")
 
 
-def _strip_outer_rank(expression: str) -> str:
-    text = expression.strip()
-    lower = text.lower()
-    if not lower.startswith("rank(") or not text.endswith(")"):
-        return text
-    depth = 0
-    for index, char in enumerate(text):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0 and index != len(text) - 1:
-                return text
-    return text[text.find("(") + 1:-1].strip()
-
-
 def _max_parenthesis_depth(expression: str) -> int:
     depth = 0
     max_depth = 0
@@ -2342,43 +2266,28 @@ def _blocker_match_detail(
 
 
 def _dedupe_rows(rows: list[dict]) -> list[dict]:
-    out = []
-    seen = set()
-    for row in rows:
+    def _key(row: dict) -> str:
         expression = str(row.get("expression") or "")
-        key = normalize_expression(expression) if expression else f"id:{row.get('alpha_id')}"
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+        return normalize_expression(expression) if expression else f"id:{row.get('alpha_id')}"
+
+    return _dedupe_rows_by_key(rows, _key)
 
 
 def _dedupe_candidates(rows: list[dict]) -> list[dict]:
-    out = []
-    seen = set()
-    for row in rows:
+    def _key(row: dict) -> str:
         expression = str(row.get("expression") or "")
         if not expression:
-            continue
-        key = normalize_expression(expression)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+            return ""
+        return normalize_expression(expression)
+
+    return _dedupe_rows_by_key(rows, _key, skip_empty=True)
 
 
 def _dedupe_memory(rows: list[dict]) -> list[dict]:
-    out = []
-    seen = set()
-    for row in rows:
-        key = (row.get("memory_kind"), row.get("failure_kind"), row.get("expression_normalized"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+    return _dedupe_rows_by_key(
+        rows,
+        lambda row: (row.get("memory_kind"), row.get("failure_kind"), row.get("expression_normalized")),
+    )
 
 
 def _run_artifact_paths(run_dirs: tuple[Path, ...], *names: str) -> tuple[Path, ...]:
@@ -2424,75 +2333,8 @@ def _dedupe_paths(paths: tuple[Path, ...]) -> tuple[Path, ...]:
 
 
 def _load_rows(paths: tuple[Path, ...]) -> list[dict]:
-    rows: list[dict] = []
-    for path in paths:
-        if not path or not path.exists():
-            continue
-        text = path.read_text(encoding="utf-8-sig").strip()
-        if not text:
-            continue
-        if path.suffix.lower() == ".json":
-            payload = json.loads(text)
-            rows.extend(_rows_from_payload(payload))
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            rows.extend(_rows_from_payload(json.loads(line)))
-    return rows
+    return _read_jsonish_rows_many(paths)
 
 
 def _load_inventory_rows(paths: tuple[Path, ...]) -> list[dict]:
-    rows: list[dict] = []
-    for path in paths:
-        if not path or not path.exists():
-            continue
-        text = path.read_text(encoding="utf-8-sig").strip()
-        if not text:
-            continue
-        if path.suffix.lower() == ".json":
-            payload = json.loads(text)
-            if isinstance(payload, dict):
-                rows.extend(_rows_from_payload(payload.get("active") or payload.get("rows") or payload))
-            else:
-                rows.extend(_rows_from_payload(payload))
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            rows.extend(_rows_from_payload(json.loads(line)))
-    return rows
-
-
-def _rows_from_payload(payload: Any) -> list[dict]:
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    if isinstance(payload, dict):
-        if isinstance(payload.get("ready"), list):
-            return [item for item in payload["ready"] if isinstance(item, dict)]
-        if isinstance(payload.get("active"), list):
-            return [item for item in payload["active"] if isinstance(item, dict)]
-        return [payload]
-    return []
-
-
-def _write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    path.write_text(text + ("\n" if text else ""), encoding="utf-8")
-
-
-def _write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return _read_jsonish_rows_many(paths, collection_keys=("active", "rows", "ready", "records", "results", "alphas"))

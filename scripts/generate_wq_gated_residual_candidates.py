@@ -18,10 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.alpha_tracker import compute_similarity
 from worldquant_harness.expression_parser import extract_components, normalize_expression
 from worldquant_harness.wq_auto_mining import validate_wq_expression
-
+from worldquant_harness.wq_similarity import compute_similarity
 
 DEFAULT_ACTIVE_NODES = ROOT / "reports" / "wq_active_alpha_map_pnl_20260610_full" / "active_nodes.jsonl"
 DEFAULT_OUTPUT = ROOT / "reports" / "wq_submit10_20260610" / "gated_residual_candidates.jsonl"

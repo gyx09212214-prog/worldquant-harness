@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from worldquant_harness.report_utils import matching_reason_count as _matching_reason_count
 from worldquant_harness.wq_efficiency import annotate_candidate_identity, lifecycle_event
 
 SELF_CORRELATION_REASONS = {
@@ -732,15 +733,6 @@ def _delta(current: dict[str, Any], baseline: dict[str, Any]) -> dict[str, Any]:
             "relative_delta": None if cur is None or base in (None, 0.0) else round((cur - base) / base, 6),
         }
     return out
-
-
-def _matching_reason_count(counts: Counter[str], targets: set[str]) -> int:
-    total = 0
-    for reason, count in counts.items():
-        lowered = str(reason).lower()
-        if lowered in targets or any(target in lowered for target in targets):
-            total += count
-    return total
 
 
 def _load_all_jsonl(paths: list[Path]) -> list[dict[str, Any]]:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -10,10 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_jsonish_rows as _read_jsonish_rows
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import safe_float as _safe_float
 from .wq_auto_mining import load_dotenv
 from .wq_brain_client import SUBMIT_THRESHOLDS, get_client, is_configured
 from .wq_brain_service import run_check_submissions, run_list_alphas, submit_threshold_checks
+from .wq_expression_utils import expression_components
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -575,14 +579,7 @@ def _active_rows(rows: list[dict]) -> list[dict]:
 
 
 def _components_for(expression: str) -> dict[str, set[str]]:
-    try:
-        parts = extract_components(expression or "")
-    except Exception:
-        return {"fields": set(), "operators": set()}
-    return {
-        "fields": {str(item) for item in parts.get("fields", set())},
-        "operators": {str(item) for item in parts.get("operators", set())},
-    }
+    return expression_components(expression)
 
 
 def _field_signature_from_components(components: dict[str, set[str]]) -> str:
@@ -590,58 +587,12 @@ def _field_signature_from_components(components: dict[str, set[str]]) -> str:
 
 
 def _read_rows(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    text = path.read_text(encoding="utf-8-sig").strip()
-    if not text:
-        return []
-    if path.suffix.lower() == ".json":
-        payload = json.loads(text)
-        return _rows_from_payload(payload)
-
-    rows: list[dict] = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        rows.extend(_rows_from_payload(json.loads(line)))
-    return rows
-
-
-def _rows_from_payload(payload: Any) -> list[dict]:
-    if isinstance(payload, list):
-        return [row for row in payload if isinstance(row, dict)]
-    if isinstance(payload, dict):
-        for key in ("alphas", "active", "rows", "results"):
-            if isinstance(payload.get(key), list):
-                return [row for row in payload[key] if isinstance(row, dict)]
-        return [payload]
-    return []
-
-
-def _write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    path.write_text(text + ("\n" if text else ""), encoding="utf-8")
-
-
-def _write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    return _read_jsonish_rows(path, collection_keys=("alphas", "active", "rows", "results"))
 
 
 def _chunks(values: list[str], size: int):
     for index in range(0, len(values), size):
         yield values[index:index + size]
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _truncate(value: str, limit: int) -> str:

@@ -6,13 +6,20 @@ then writes a candidate JSONL for the existing presubmit workflow.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import read_jsonish_rows_many as _read_jsonish_rows_many
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import write_json as artifact_write_json
+from .artifact_io import write_jsonl as artifact_write_jsonl
+from .artifact_io import write_text as artifact_write_text
+from .record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
+from .record_utils import safe_float as _safe_float
+from .report_utils import markdown_cell as _md
 from .wq_forum_submission_optimizer import load_submission_policy
 from .wq_research_miner import WQResearchMinerConfig, screen_candidate_drafts
 
@@ -112,15 +119,24 @@ def write_forum_expression_expansion_artifacts(
     obsidian_output: Path | None = None,
 ) -> dict[str, str]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "summary.json"
+    candidates_path = output_dir / "forum_expansion_candidates.jsonl"
+    rejected_path = output_dir / "screened_out.jsonl"
+    markdown_path = output_dir / "forum_expression_expansion.md"
+    artifact_write_json(summary_path, _summary(plan))
+    artifact_write_jsonl(candidates_path, plan["candidates"])
+    artifact_write_jsonl(rejected_path, plan["rejected"])
+    artifact_write_text(markdown_path, plan["markdown"])
     files = {
-        "summary": str(_write_json(output_dir / "summary.json", _summary(plan))),
-        "candidates": str(_write_jsonl(output_dir / "forum_expansion_candidates.jsonl", plan["candidates"])),
-        "rejected": str(_write_jsonl(output_dir / "screened_out.jsonl", plan["rejected"])),
-        "markdown": str(_write_text(output_dir / "forum_expression_expansion.md", plan["markdown"])),
+        "summary": str(summary_path),
+        "candidates": str(candidates_path),
+        "rejected": str(rejected_path),
+        "markdown": str(markdown_path),
     }
     if obsidian_output:
         obsidian_output.parent.mkdir(parents=True, exist_ok=True)
-        files["obsidian"] = str(_write_text(obsidian_output, plan["markdown"]))
+        artifact_write_text(obsidian_output, plan["markdown"])
+        files["obsidian"] = str(obsidian_output)
     plan["files"] = files
     return files
 
@@ -466,75 +482,31 @@ def _load_forum_recipes(memory_dirs: tuple[Path, ...]) -> list[dict]:
     rows = []
     for directory in memory_dirs:
         path = directory / "forum_candidate_recipes.jsonl"
-        rows.extend(_load_jsonl(path))
+        rows.extend(_read_jsonl(path))
     return rows
 
 
 def _load_direction_scores(paths: tuple[Path, ...]) -> list[dict]:
     rows = []
     for path in paths:
-        rows.extend(_load_jsonl(path))
+        rows.extend(_read_jsonl(path))
     return rows
 
 
 def _load_rows(paths: tuple[Path, ...]) -> list[dict]:
-    rows = []
-    for path in paths:
-        if not path.exists():
-            continue
-        if path.suffix.lower() == ".json":
-            try:
-                data = json.loads(path.read_text(encoding="utf-8-sig"))
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, list):
-                rows.extend(row for row in data if isinstance(row, dict))
-            elif isinstance(data, dict):
-                for key in ("rows", "records", "active", "real_active", "virtual_active", "ready"):
-                    value = data.get(key)
-                    if isinstance(value, list):
-                        rows.extend(row for row in value if isinstance(row, dict))
-                if not rows and data.get("expression"):
-                    rows.append(data)
-            continue
-        rows.extend(_load_jsonl(path))
-    return rows
+    return _read_jsonish_rows_many(paths, collection_keys=("rows", "records", "active", "real_active", "virtual_active", "ready", "results", "alphas"))
 
 
 def _load_inventory_rows(paths: tuple[Path, ...]) -> list[dict]:
     return _load_rows(paths)
 
 
-def _load_jsonl(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    rows = []
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            rows.append(value)
-    return rows
-
-
 def _dedupe_by_expression(rows: list[dict]) -> list[dict]:
-    seen = set()
-    out = []
-    for row in rows:
-        expression = str(row.get("expression") or "").strip()
-        if not expression:
-            continue
-        key = expression.lower().replace(" ", "")
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+    return _dedupe_rows_by_key(
+        rows,
+        lambda row: str(row.get("expression") or "").strip().lower().replace(" ", ""),
+        skip_empty=True,
+    )
 
 
 def _selected_candidate_sort_key(row: dict) -> tuple:
@@ -548,13 +520,6 @@ def _selected_candidate_sort_key(row: dict) -> tuple:
         str(row.get("source_family") or ""),
         str(row.get("tag") or ""),
     )
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _recipe_fields(recipe: dict) -> list[str]:
@@ -576,30 +541,6 @@ def _summary(plan: dict[str, Any]) -> dict[str, Any]:
         "inputs": plan.get("inputs"),
         "files": plan.get("files", {}),
     }
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    return path
-
-
-def _write_jsonl(path: Path, rows: list[dict]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-    return path
-
-
-def _write_text(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
 
 
 def _format_counter(value: Any) -> str:

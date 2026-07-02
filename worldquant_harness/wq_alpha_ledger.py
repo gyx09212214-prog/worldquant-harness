@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -13,9 +11,11 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .alpha_tracker import compute_similarity
+from .async_utils import run_coro_sync
 from .expression_parser import normalize_expression
 from .models import SubmittedAlpha, WQAlphaExperiment, WQFailureMemory
+from .record_utils import first_float as _first_float
+from .record_utils import nested as _nested
 from .wq_failure_memory import (
     classify_failures,
     expression_components,
@@ -27,6 +27,7 @@ from .wq_failure_memory import (
     pattern_signature,
     primary_failure_kind,
 )
+from .wq_similarity import compute_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -383,6 +384,18 @@ def record_api_check_record_sync(record: dict, **kwargs) -> dict | None:
 def record_api_check_records_sync(records: list[dict], **kwargs) -> dict:
     result = _safe_sync(_record_api_check_records_with_db(records, **kwargs))
     return result or {"ok": False, "recorded": 0}
+
+
+def record_api_check_records_safe(records: list[dict], *, account: str, source_run_id: str) -> dict:
+    """Record API-check rows with the script-facing error payload shape."""
+    try:
+        return record_api_check_records_sync(
+            records,
+            settings={"account": account},
+            source_run_id=source_run_id,
+        )
+    except Exception as exc:
+        return {"ok": False, "recorded": 0, "error": str(exc)}
 
 
 def record_submitted_alpha_in_ledger_sync(**kwargs) -> dict | None:
@@ -782,35 +795,10 @@ def _safe_sync(coro):
     if os.environ.get("WQ_LEDGER_DISABLED"):
         return None
     try:
-        return _run_coro_sync(coro)
+        return run_coro_sync(coro, timeout=30, timeout_message="timed out waiting for WQ ledger operation")
     except Exception as exc:
         logger.warning("WQ alpha ledger operation failed: %s", exc)
         return None
-
-
-def _run_coro_sync(coro):
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    result_box: dict[str, Any] = {}
-    error_box: dict[str, BaseException] = {}
-
-    def _worker() -> None:
-        try:
-            result_box["result"] = asyncio.run(coro)
-        except BaseException as exc:  # pragma: no cover - defensive bridge
-            error_box["error"] = exc
-
-    thread = threading.Thread(target=_worker, daemon=True)
-    thread.start()
-    thread.join(timeout=30)
-    if thread.is_alive():
-        raise TimeoutError("timed out waiting for WQ ledger operation")
-    if error_box:
-        raise error_box["error"]
-    return result_box.get("result")
 
 
 def _nearest_similarity(expression: str, candidates: list[dict]) -> dict | None:
@@ -883,30 +871,6 @@ def _overall_similarity(value: Any) -> Any:
     if isinstance(value, dict):
         return value.get("overall_similarity")
     return None
-
-
-def _nested(payload: dict, *keys: str) -> Any:
-    cur: Any = payload
-    for key in keys:
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(key)
-    return cur
-
-
-def _first_float(*values: Any) -> float | None:
-    for value in values:
-        parsed = _safe_float(value)
-        if parsed is not None:
-            return parsed
-    return None
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _first_bool(*values: Any) -> bool | None:

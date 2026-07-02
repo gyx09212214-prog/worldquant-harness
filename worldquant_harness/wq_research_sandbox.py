@@ -9,7 +9,6 @@ decision, but it never calls the real submit endpoint.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -17,7 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_json as _read_json
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import nested as _nested
 from .wq_agent_workflow import (
     GENERATION_EVOLUTIONARY,
     GENERATION_MIXED_EVOLUTIONARY,
@@ -25,10 +30,10 @@ from .wq_agent_workflow import (
     WQAgentWorkflowConfig,
     run_workflow,
 )
+from .wq_expression_utils import expression_fields, expression_operators
 from .wq_research_miner import WQResearchMinerConfig, run_research_miner
+from .wq_research_paths import DEFAULT_EXPERIMENT_ROOT, resolve_research_experiment_dir
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EXPERIMENT_ROOT = ROOT / "reports" / "wq_research_experiments"
 SCHEMA_VERSION = 1
 
 
@@ -462,19 +467,11 @@ def _candidate_spec_id(experiment_id: str, expression: str, index: int) -> str:
 
 
 def _fields(expression: str) -> list[str]:
-    try:
-        parts = extract_components(expression)
-    except Exception:
-        return []
-    return sorted(str(item) for item in parts.get("fields", []))
+    return expression_fields(expression)
 
 
 def _operators(expression: str) -> list[str]:
-    try:
-        parts = extract_components(expression)
-    except Exception:
-        return []
-    return sorted(str(item) for item in parts.get("operators", []))
+    return expression_operators(expression)
 
 
 def _compact_presubmit_summary(summary: dict[str, Any]) -> dict[str, Any]:
@@ -538,18 +535,7 @@ def _ensure_experiment(record: dict[str, Any], paths: ResearchSandboxPaths) -> N
 
 
 def _resolve_experiment_dir(experiment: Path) -> Path:
-    path = Path(experiment)
-    if (path / "experiment.yaml").is_file():
-        return path
-    if path.is_file():
-        return path.parent
-    candidate = DEFAULT_EXPERIMENT_ROOT / str(experiment)
-    if (candidate / "experiment.yaml").is_file():
-        return candidate
-    named_candidate = DEFAULT_EXPERIMENT_ROOT / path.name
-    if (named_candidate / "experiment.yaml").is_file():
-        return named_candidate
-    raise FileNotFoundError(f"experiment not found: {experiment}")
+    return resolve_research_experiment_dir(experiment)
 
 
 def _experiment_id(topic: str) -> str:
@@ -575,50 +561,3 @@ This sandbox is local research state for WorldQuant alpha mining.
 
 No command in this sandbox submits alphas.
 """
-
-
-def _nested(payload: dict[str, Any], *keys: str) -> Any:
-    current: Any = payload
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {}
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        return {}
-    return json.loads(text)
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        rows.append(json.loads(line))
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
-        path.write_text("", encoding="utf-8")
-        return
-    path.write_text("\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows) + "\n", encoding="utf-8")

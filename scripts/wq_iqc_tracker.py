@@ -5,6 +5,5 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from worldquant_harness.wq_iqc_tracker import main
 
-
 if __name__ == "__main__":
     raise SystemExit(main())

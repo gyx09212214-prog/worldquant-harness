@@ -14,7 +14,6 @@ if str(ROOT) not in sys.path:
 
 from worldquant_harness.expression_parser import extract_components, normalize_expression
 
-
 DEFAULT_REPORT_ROOT = ROOT / "reports"
 DEFAULT_ACTIVE_NODES = ROOT / "reports" / "wq_active_alpha_map_pnl_20260610_full" / "active_nodes.jsonl"
 DEFAULT_OUTPUT = ROOT / "reports" / "wq_submit10_20260610" / "history_ready_lowcorr_submit_candidates.jsonl"

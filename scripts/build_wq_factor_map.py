@@ -17,7 +17,6 @@ if str(ROOT) not in sys.path:
 from worldquant_harness.wq_auto_mining import load_dotenv
 from worldquant_harness.wq_factor_map import FactorMapConfig, build_factor_map
 
-
 DEFAULT_INPUT_GLOBS = (
     "reports/wq_forum_research_*/**/*.jsonl",
     "reports/wq_forum_find_only_*/**/*.jsonl",

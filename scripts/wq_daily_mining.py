@@ -21,14 +21,16 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts import check_wq_submissions as submission_checks
+from scripts import wq_find_only
+from worldquant_harness.artifact_io import read_jsonl as _read_jsonl
+from worldquant_harness.artifact_io import write_jsonl as _write_jsonl
 from worldquant_harness.expression_parser import normalize_expression
+from worldquant_harness.record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
 from worldquant_harness.wq_auto_mining import load_dotenv, write_json
 from worldquant_harness.wq_brain_client import get_client, is_configured
 from worldquant_harness.wq_brain_service import run_list_alphas
 from worldquant_harness.wq_forum_submission_optimizer import annotate_candidate_with_policy, load_submission_policy
-from scripts import check_wq_submissions as submission_checks
-from scripts import wq_find_only
-
 
 PASS_STATUSES = {"api_check_readable"}
 FAIL_STATUSES = {"self_correlation_fail", "prod_correlation_fail"}
@@ -597,15 +599,7 @@ def _is_submit_ready(row: dict) -> bool:
 
 
 def _dedupe_alpha_rows(rows: list[dict]) -> list[dict]:
-    seen: set[str] = set()
-    unique: list[dict] = []
-    for row in rows:
-        alpha_id = str(row.get("alpha_id") or "")
-        if not alpha_id or alpha_id in seen:
-            continue
-        seen.add(alpha_id)
-        unique.append(row)
-    return unique
+    return _dedupe_rows_by_key(rows, lambda row: str(row.get("alpha_id") or ""), skip_empty=True)
 
 
 def _write_status(path: Path, config: DailyMiningConfig, status: str, message: str) -> None:
@@ -620,20 +614,6 @@ def _write_status(path: Path, config: DailyMiningConfig, status: str, message: s
         "canonical_entrypoint": "scripts/wq_daily_mining.py",
         "authoritative_status_file": str(path),
     })
-
-
-def _read_jsonl(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip().startswith("{")]
-
-
-def _write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    if text:
-        text += "\n"
-    path.write_text(text, encoding="utf-8")
 
 
 def _count_jsonl_rows(path: Path) -> int:

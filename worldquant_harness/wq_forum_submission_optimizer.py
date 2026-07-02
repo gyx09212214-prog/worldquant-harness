@@ -18,8 +18,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .expression_parser import extract_components
+from .artifact_io import read_jsonl as artifact_read_jsonl
+from .artifact_io import write_json as artifact_write_json
+from .artifact_io import write_jsonl as artifact_write_jsonl
+from .artifact_io import write_text as artifact_write_text
+from .record_utils import nested as _nested
+from .record_utils import safe_float as _safe_float
+from .record_utils import safe_int as _safe_int
+from .report_utils import markdown_cell as _md
 from .wq_evolutionary_generator import classify_domain
+from .wq_expression_utils import expression_components
 
 THEME_DOMAIN_HINTS = {
     "fundamental_value_quality": ("fundamental_quality",),
@@ -125,8 +133,8 @@ def build_forum_submission_plan(config: ForumSubmissionOptimizerConfig) -> dict[
 
 def load_factor_map(factor_map_dir: Path) -> dict[str, Any]:
     return {
-        "nodes": _read_jsonl(factor_map_dir / "nodes.jsonl"),
-        "edges": _read_jsonl(factor_map_dir / "edges.jsonl"),
+        "nodes": artifact_read_jsonl(factor_map_dir / "nodes.jsonl"),
+        "edges": artifact_read_jsonl(factor_map_dir / "edges.jsonl"),
         "domain_summary": _read_csv(factor_map_dir / "domain_summary.csv"),
         "field_summary": _read_csv(factor_map_dir / "field_summary.csv"),
     }
@@ -143,14 +151,15 @@ def load_forum_memory(
     combinations: list[dict[str, Any]] = []
     skills: list[dict[str, Any]] = []
     for directory in memory_dirs:
-        clusters.extend(_read_jsonl(_first_existing(directory, "forum_idea_clusters_strict.jsonl", "forum_idea_clusters.jsonl")))
-        recipes.extend(_read_jsonl(directory / "forum_candidate_recipes.jsonl"))
-        rules.extend(_read_jsonl(directory / "forum_pattern_rules.jsonl"))
-        combinations.extend(_read_jsonl(directory / "forum_idea_theme_combinations.jsonl"))
-        skills.extend(_read_jsonl(_first_existing(directory, "community_skill_memory.jsonl", "skill_memory.jsonl")))
-        skills.extend(_read_jsonl(directory / "skill_memory" / "community_skill_memory.jsonl"))
+        clusters.extend(artifact_read_jsonl(_first_existing(directory, "forum_idea_clusters_strict.jsonl", "forum_idea_clusters.jsonl")))
+        recipes.extend(artifact_read_jsonl(directory / "forum_candidate_recipes.jsonl"))
+        rules.extend(artifact_read_jsonl(directory / "forum_pattern_rules.jsonl"))
+        combinations.extend(artifact_read_jsonl(directory / "forum_idea_theme_combinations.jsonl"))
+        skills.extend(artifact_read_jsonl(_first_existing(directory, "community_skill_memory.jsonl", "skill_memory.jsonl")))
+        skills.extend(artifact_read_jsonl(directory / "skill_memory" / "community_skill_memory.jsonl"))
     for path in extra_skill_files:
-        skills.extend(_read_jsonl(path))
+        if path:
+            skills.extend(artifact_read_jsonl(path))
     return {
         "clusters": _dedupe_by_keys(clusters, ("theme_id", "title", "label")),
         "recipes": _dedupe_by_keys(recipes, ("recipe_id", "template")),
@@ -172,7 +181,7 @@ def load_submitted_alpha_map(map_dir: Path | None) -> dict[str, Any] | None:
         "field_summary": _read_csv(directory / "submitted_field_summary.csv"),
         "operator_summary": _read_csv(directory / "submitted_operator_summary.csv"),
         "similarity_pairs": _read_csv(directory / "submitted_similarity_pairs.csv"),
-        "alpha_details": _read_jsonl(directory / "submitted_alpha_details.jsonl"),
+        "alpha_details": artifact_read_jsonl(directory / "submitted_alpha_details.jsonl"),
     }
 
 
@@ -511,7 +520,7 @@ def evaluate_candidate_policy(candidate: dict[str, Any], policy: dict[str, Any] 
     if not policy:
         return {"action": "allow", "reason": "no_policy", "score_adjustment": 0.0}
     expression = str(candidate.get("expression") or "")
-    components = extract_components(expression) if expression else {"fields": set(), "operators": set()}
+    components = expression_components(expression) if expression else {"fields": set(), "operators": set()}
     fields = set(components.get("fields", []))
     domain = classify_domain(sorted(fields), expression) if expression else "unknown"
     marker_text = " ".join(str(candidate.get(key) or "") for key in ("source", "source_family", "tag", "mutation_strategy")).lower()
@@ -632,14 +641,25 @@ def write_forum_submission_artifacts(
     files: dict[str, str] = {}
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        files["direction_scores"] = str(_write_jsonl(output_dir / "forum_direction_scores.jsonl", plan["directions"]))
-        files["submission_policy"] = str(_write_json(output_dir / "submission_policy.json", plan["submission_policy"]))
-        files["candidate_budget"] = str(_write_json(output_dir / "candidate_budget.json", plan["candidate_budget"]))
-        files["summary"] = str(_write_json(output_dir / "summary.json", _summary_payload(plan)))
-        files["markdown"] = str(_write_text(output_dir / "forum_submission_playbook.md", plan["markdown"]))
+        direction_scores_path = output_dir / "forum_direction_scores.jsonl"
+        submission_policy_path = output_dir / "submission_policy.json"
+        candidate_budget_path = output_dir / "candidate_budget.json"
+        summary_path = output_dir / "summary.json"
+        markdown_path = output_dir / "forum_submission_playbook.md"
+        artifact_write_jsonl(direction_scores_path, plan["directions"])
+        artifact_write_json(submission_policy_path, plan["submission_policy"])
+        artifact_write_json(candidate_budget_path, plan["candidate_budget"])
+        artifact_write_json(summary_path, _summary_payload(plan))
+        artifact_write_text(markdown_path, plan["markdown"])
+        files["direction_scores"] = str(direction_scores_path)
+        files["submission_policy"] = str(submission_policy_path)
+        files["candidate_budget"] = str(candidate_budget_path)
+        files["summary"] = str(summary_path)
+        files["markdown"] = str(markdown_path)
     if obsidian_output:
         obsidian_output.parent.mkdir(parents=True, exist_ok=True)
-        files["obsidian"] = str(_write_text(obsidian_output, plan["markdown"]))
+        artifact_write_text(obsidian_output, plan["markdown"])
+        files["obsidian"] = str(obsidian_output)
     plan.setdefault("files", {}).update(files)
     return files
 
@@ -1104,7 +1124,7 @@ def _cluster_fields(cluster: dict[str, Any]) -> list[str]:
 
 
 def _operators_from_template(template: str) -> list[dict[str, Any]]:
-    ops = sorted(extract_components(template).get("operators", [])) if template else []
+    ops = sorted(expression_components(template).get("operators", [])) if template else []
     return [{"value": op, "count": 1} for op in ops]
 
 
@@ -1165,48 +1185,11 @@ def _submitted_policy_table(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _read_jsonl(path: Path | None) -> list[dict[str, Any]]:
-    if not path or not path.is_file():
-        return []
-    rows = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
-
-
 def _read_csv(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     with path.open("r", encoding="utf-8-sig", newline="") as fh:
         return list(csv.DictReader(fh))
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    return path
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-    return path
-
-
-def _write_text(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
 
 
 def _summary_payload(plan: dict[str, Any]) -> dict[str, Any]:
@@ -1246,37 +1229,6 @@ def _first_existing(directory: Path, *names: str) -> Path:
     return directory / names[0]
 
 
-def _nested(payload: Any, *keys: str) -> Any:
-    cur = payload
-    for key in keys:
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(key)
-    return cur
-
-
 def _avg(values: list[float | None]) -> float:
     clean = [value for value in values if value is not None and not math.isnan(value)]
     return sum(clean) / len(clean) if clean else 0.0
-
-
-def _safe_float(value: Any, default: float | None = None) -> float | None:
-    try:
-        if value is None or value == "":
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _safe_int(value: Any) -> int | None:
-    try:
-        if value is None or value == "":
-            return None
-        return int(float(value))
-    except (TypeError, ValueError):
-        return None
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")

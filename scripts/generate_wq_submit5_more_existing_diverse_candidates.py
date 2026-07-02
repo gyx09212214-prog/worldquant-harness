@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PLATFORM = ROOT / "reports" / "wq_active_alpha_map_refresh_20260611_submit5" / "platform_alphas.jsonl"
 DEFAULT_ACTIVE = ROOT / "reports" / "wq_active_alpha_map_refresh_20260611_submit5" / "selected_alpha_inventory.jsonl"

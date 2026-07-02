@@ -2,24 +2,33 @@
 
 from __future__ import annotations
 
-import asyncio
-import csv
 import hashlib
-import json
 import re
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_csv as _write_csv
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .async_utils import run_coro_sync
+from .record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
+from .record_utils import first_float as _first_float
+from .record_utils import first_text as _first_text
+from .record_utils import nested as _nested
 from .wq_failure_memory import (
     expression_components,
     expression_hash,
     normalized_settings,
     pattern_signature,
 )
+from .wq_failure_taxonomy import canonical_failure_kind as taxonomy_canonical_failure_kind
+from .wq_platform_artifacts import fetch_platform_alphas as _fetch_platform_alphas
+from .wq_platform_artifacts import local_file_inventory as _local_file_inventory
 from .wq_pnl_analysis import aligned_daily_return_correlation
 from .wq_research_profile import default_research_profile
 
@@ -136,7 +145,7 @@ def collect_history_experience(
         "summary": str(output_dir / "summary.json"),
         "summary_md": str(output_dir / "summary.md"),
     }
-    _write_csv(Path(files["local_file_inventory"]), inventory)
+    _write_csv(Path(files["local_file_inventory"]), inventory, encoding="utf-8")
     _write_jsonl(Path(files["platform_alphas"]), platform_result.get("alphas") or [])
     _write_jsonl(Path(files["platform_check_results"]), platform_result.get("check_records") or [])
     _write_json(Path(files["platform_probe_summary"]), {
@@ -184,16 +193,7 @@ def discover_local_history_files(reports_dir: Path | str) -> list[Path]:
 
 
 def local_file_inventory(files: list[Path]) -> list[dict[str, Any]]:
-    return [
-        {
-            "path": str(path),
-            "name": path.name,
-            "source_type": source_type_for_path(path),
-            "size_bytes": path.stat().st_size,
-            "modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
-        }
-        for path in files
-    ]
+    return _local_file_inventory(files, source_type_for_path=source_type_for_path)
 
 
 def collect_local_history_events(files: list[Path]) -> list[dict[str, Any]]:
@@ -359,25 +359,7 @@ def collect_platform_history(
 
 
 def fetch_platform_alphas(client: Any, *, limit: int = 0) -> list[dict[str, Any]]:
-    alphas: list[dict[str, Any]] = []
-    offset = 0
-    page_size = 100
-    while True:
-        payload = client.get_json(
-            "/users/self/alphas",
-            params={"limit": page_size, "offset": offset, "order": "-dateCreated"},
-        )
-        results = payload.get("results") if isinstance(payload, dict) else []
-        if not isinstance(results, list) or not results:
-            break
-        alphas.extend(row for row in results if isinstance(row, dict))
-        if limit and len(alphas) >= limit:
-            return alphas[:limit]
-        offset += len(results)
-        total = payload.get("count") if isinstance(payload, dict) else None
-        if isinstance(total, int) and offset >= total:
-            break
-    return alphas
+    return _fetch_platform_alphas(client, limit=limit)
 
 
 def check_platform_alphas(
@@ -687,7 +669,11 @@ def build_pnl_corr_islands(
 
 
 def write_history_to_ledger(events: list[dict[str, Any]], *, account: str) -> dict[str, Any]:
-    return _run_coro_sync(_write_history_to_ledger_async(events, account=account))
+    return run_coro_sync(
+        _write_history_to_ledger_async(events, account=account),
+        timeout=300,
+        timeout_message="timed out waiting for WQ history ledger write",
+    )
 
 
 async def _write_history_to_ledger_async(events: list[dict[str, Any]], *, account: str) -> dict[str, Any]:
@@ -872,44 +858,14 @@ def canonical_failure_kind(
     prod_result: str | None,
     sc_value: float | None,
 ) -> str | None:
-    raw = str(row.get("failure_kind") or row.get("review_failure_kind") or "").lower()
-    reason = str(row.get("presubmit_reject_reason") or row.get("triage_reason") or row.get("status") or row.get("final_status") or "").lower()
-    if platform_status in {"ACTIVE", "SUBMITTED"}:
-        return "platform_alpha"
-    if api_status in {"self_correlation_fail", "prod_correlation_fail", "platform_active_sc_above_cutoff", "platform_active_check_readable"}:
-        return "platform_alpha" if api_status.startswith("platform_active") else api_status
-    if raw in {"self_correlation", "self_correlation_high", "self_correlation_fail"}:
-        return "self_correlation_fail"
-    if raw in {"prod_correlation", "prod_correlation_fail"}:
-        return "prod_correlation_fail"
-    if raw in {"high_similarity", "too_similar_to_real_or_virtual_active"}:
-        return "high_similarity"
-    if prod_result == "FAIL" or "prod_correlation" in reason:
-        return "prod_correlation_fail"
-    if sc_result == "FAIL" or (sc_value is not None and sc_value >= 0.70) or "self_correlation" in reason:
-        return "self_correlation_fail"
-    nearest = _first_float(row.get("nearest_similarity"), _nested(row, "presubmit_gate", "nearest_similarity"))
-    if nearest is not None and nearest > 0.65:
-        return "high_similarity"
-    if "too_similar" in reason or "duplicate" in reason or "skipped_similar" in reason:
-        return "high_similarity"
-    for check in row.get("failed_platform_checks") or []:
-        name = str(check.get("name") or "").upper()
-        if name in {"CONCENTRATED_WEIGHT"}:
-            return "concentrated_weight"
-        if name in {"LOW_SUB_UNIVERSE_SHARPE", "LOW_SUB_UNIVERSE_FITNESS"}:
-            return "sub_universe_fail"
-        if name == "LOW_SHARPE":
-            return "low_sharpe"
-        if name == "LOW_FITNESS":
-            return "low_fitness"
-        if name == "LOW_TURNOVER":
-            return "low_turnover"
-        if name == "HIGH_TURNOVER":
-            return "high_turnover"
-    if raw:
-        return raw
-    return None
+    return taxonomy_canonical_failure_kind(
+        row,
+        api_status=api_status,
+        platform_status=platform_status,
+        sc_result=sc_result,
+        prod_result=prod_result,
+        sc_value=sc_value,
+    )
 
 
 def severity_for_failure(failure_kind: str | None, *, platform_status: str, source_type: str) -> str:
@@ -1055,88 +1011,15 @@ def _detail_value(detail: Any, kind: str) -> float | None:
     return _first_float(match.group(1)) if match else None
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    path.write_text(text + ("\n" if text else ""), encoding="utf-8")
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    keys: list[str] = []
-    for row in rows:
-        for key in row:
-            if key not in keys:
-                keys.append(key)
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=keys or ["empty"], extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
 def _dedupe_memory_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[tuple[Any, Any, Any]] = set()
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        key = (row.get("memory_type"), row.get("failure_kind"), row.get("expression_hash") or row.get("pattern_signature"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+    return _dedupe_rows_by_key(
+        rows,
+        lambda row: (row.get("memory_type"), row.get("failure_kind"), row.get("expression_hash") or row.get("pattern_signature")),
+    )
 
 
 def _dedupe_by_expression(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        key = expression_hash(str(row.get("expression") or ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
-
-
-def _first_text(*values: Any) -> str | None:
-    for value in values:
-        if value is not None and str(value).strip() != "":
-            return str(value)
-    return None
-
-
-def _first_float(*values: Any) -> float | None:
-    for value in values:
-        if value is None or value == "":
-            continue
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            continue
-    return None
+    return _dedupe_rows_by_key(rows, lambda row: expression_hash(str(row.get("expression") or "")))
 
 
 def _first_bool(*values: Any) -> bool | None:
@@ -1145,43 +1028,3 @@ def _first_bool(*values: Any) -> bool | None:
             continue
         return bool(value)
     return None
-
-
-def _nested(payload: dict[str, Any], *keys: str) -> Any:
-    current: Any = payload
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
-def _run_coro_sync(coro):
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    result_box: dict[str, Any] = {}
-    error_box: dict[str, BaseException] = {}
-
-    def _worker() -> None:
-        try:
-            result_box["result"] = asyncio.run(coro)
-        except BaseException as exc:  # pragma: no cover - defensive bridge
-            error_box["error"] = exc
-
-    import threading
-
-    thread = threading.Thread(target=_worker, daemon=True)
-    thread.start()
-    thread.join(timeout=300)
-    if thread.is_alive():
-        raise TimeoutError("timed out waiting for WQ history ledger write")
-    if error_box:
-        raise error_box["error"]
-    return result_box.get("result")
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

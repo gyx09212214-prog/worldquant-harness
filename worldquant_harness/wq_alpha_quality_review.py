@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import csv
-import json
 import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -12,9 +11,21 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_csv as _write_csv
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .artifact_io import write_text as _write_text
+from .expression_parser import normalize_expression
+from .record_utils import first_float as _first_float
+from .record_utils import first_text as _first_text
+from .record_utils import nested as _nested
+from .record_utils import safe_int as _int_or_none
+from .report_utils import ratio as _ratio
 from .wq_efficiency import annotate_candidate_identity
 from .wq_evolutionary_generator import classify_domain
+from .wq_expression_utils import expression_components as _components
 from .wq_history_experience import (
     api_check_record_from_result,
     client_check_alpha_submission,
@@ -332,7 +343,7 @@ def _collect_platform_events(
         check_events = []
         for row in check_records:
             event = normalize_event(row, source_type="api_check", source_file="platform:/alphas/check")
-            event["event_time"] = row.get("created_at") or _now()
+            event["event_time"] = _first_text(row.get("dateSubmitted"), row.get("dateCreated"), row.get("created_at")) or _now()
             check_events.append(event)
 
         return {
@@ -854,19 +865,6 @@ def _failure_kind(event: dict[str, Any]) -> str:
     return "none"
 
 
-def _components(expression: str) -> dict[str, set[str]]:
-    if not expression:
-        return {"fields": set(), "operators": set()}
-    try:
-        components = extract_components(expression)
-    except Exception:
-        return {"fields": set(), "operators": set()}
-    return {
-        "fields": {str(value) for value in components.get("fields") or []},
-        "operators": {str(value) for value in components.get("operators") or []},
-    }
-
-
 def _metric_pass(*, sharpe: float | None, fitness: float | None, turnover: float | None) -> bool:
     return (
         sharpe is not None
@@ -996,67 +994,10 @@ def _duplicate_ratio(values: list[str]) -> float | None:
     return round((len(values) - len(set(values))) / len(values), 6)
 
 
-def _ratio(numerator: float | int, denominator: float | int) -> float | None:
-    if not denominator:
-        return None
-    return round(float(numerator) / float(denominator), 6)
-
-
 def _mean(values) -> float | None:
     cleaned = [_first_float(value) for value in values]
     cleaned = [value for value in cleaned if value is not None]
     return round(statistics.mean(cleaned), 6) if cleaned else None
-
-
-def _first_text(*values: Any) -> str | None:
-    for value in values:
-        if value is not None and str(value).strip() != "":
-            return str(value)
-    return None
-
-
-def _first_float(*values: Any) -> float | None:
-    for value in values:
-        if value is None or value == "":
-            continue
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _int_or_none(value: Any) -> int | None:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return None
-
-
-def _nested(payload: dict[str, Any], *keys: str) -> Any:
-    current: Any = payload
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
 
 
 def _read_csv(path: Path) -> list[dict[str, Any]]:
@@ -1065,36 +1006,6 @@ def _read_csv(path: Path) -> list[dict[str, Any]]:
             return [dict(row) for row in csv.DictReader(fh)]
     except OSError:
         return []
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    path.write_text(text + ("\n" if text else ""), encoding="utf-8")
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    keys: list[str] = []
-    for row in rows:
-        for key in row:
-            if key not in keys:
-                keys.append(key)
-    with path.open("w", encoding="utf-8-sig", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=keys or ["empty"], extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
-def _write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
 
 
 def _fmt(value: Any) -> str:
@@ -1106,7 +1017,3 @@ def _fmt(value: Any) -> str:
 
 def _md(value: Any) -> str:
     return str(value or "").replace("|", "\\|")
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

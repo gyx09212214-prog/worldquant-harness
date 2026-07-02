@@ -126,19 +126,21 @@ This branch adds the first full Alpha-GPT-style memory workflow. The important c
 | Area | What changed |
 |:--|:--|
 | Alpha-GPT harness | Adds `hypotheses.jsonl`, `alpha_gpt_candidate_specs.jsonl`, `review_decisions.jsonl`, `reflection_records.jsonl`, and `submit_evidence.json` to the public contract path |
-| Community skill memory | Converts WQ Community triage and forum memory into reusable gates and repair routes |
+| Community skill memory | Converts WQ Community triage and forum memory into reusable gates plus refined failure-action repair routes |
 | WQ alpha search memory | Merges local simulation/check/submit artifacts into a trajectory ledger, family scores, near-pass repair queue, and submit/check target queues |
 | Explicit submit loop | Adds a local candidate-file driven simulation/submit script; it still requires credentials and explicit non-`--no-submit` execution |
+| Iteration audit | Writes `iteration_audit.jsonl`, `iteration_audit_summary.json`, and `iteration_audit.md` by default so each run explains tweaks, results, failure causes, and next actions |
 | Code review cleanup | Consolidates JSON artifact helpers for the new memory workflow and tightens configuration-driven scoring behavior |
 
 Key reusable skills / 关键 skills:
 
 | Skill | Role |
 |:--|:--|
-| `community::near_pass_repair` | Repair near-pass candidates before spending fresh exploration budget |
-| `community::alpha_template_transform` | Treat forum templates as grammar only; require transformed fields/operators before simulation |
-| `community::operation_attribution` | Map turnover, unit, field, operator, and platform-limit failures to repair actions |
-| `community::submission_gate` | Gate stale checks, direct templates, crowded fields, and unsupported operators before submit |
+| `community::near_pass_repair` | Backward-compatible near-pass route; now points into metric overlay and correlation family-shift repair buckets |
+| `community::alpha_template_transform` | Backward-compatible template route; now points into the direct-template clone blocker |
+| `community::operation_attribution` | Backward-compatible operator route; now points into turnover/density, unit probe, and concentration repair buckets |
+| `community::submission_gate` | Backward-compatible submit gate; now points into stale-check, duplicate, and similarity-blocking buckets |
+| `community_failure::*` | Refined failure-action skills distilled from forum/submission records: metric near-pass overlay repair, correlation family shift, template clone blocker, low-coverage/concentration repair, turnover/density repair, pending-check gating, duplicate blocking, and platform/unit probes |
 | `near_sc_cutoff_settings_repair` | Freeze a strong parent expression and vary neutralization/decay/truncation near SELF_CORRELATION cutoff |
 | `top5_high_score_low_corr_submit` | Rank explicit submit/check work by WQ score, eligibility, and correlation risk |
 

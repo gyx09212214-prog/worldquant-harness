@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 from worldquant_harness.expression_parser import parse_expression
 from worldquant_harness.wq_brain_client import get_client, is_configured
 from worldquant_harness.wq_brain_service import run_single_simulation
+from worldquant_harness.wq_progress import ascii_progress_message as _progress_message
 
 
 def _load_dotenv():
@@ -47,20 +48,6 @@ def _update_status(status_file: str | None, **updates) -> None:
     current["updated_at"] = datetime.now().isoformat(timespec="seconds")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _progress_message(progress: int, message: str) -> str:
-    if "并发限制" in message:
-        return "Concurrent simulation limit; waiting before retry"
-    if "速率限制" in message:
-        return "Rate limited; waiting before retry"
-    if "连接异常" in message:
-        return "Connection error; waiting before retry"
-    if "模拟完成" in message:
-        return "Simulation completed"
-    if "模拟进行中" in message:
-        return f"Simulation running ({progress}%)"
-    return message
 
 
 def main() -> int:

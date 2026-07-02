@@ -10,15 +10,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 async def main():
-    from worldquant_harness.db import _get_session_factory, init_db
-    from worldquant_harness.models import Task as TaskModel, User
-    from worldquant_harness.auth import _DEV_USER_ID
-    from worldquant_harness.wq_brain_client import WQBrainClient, is_configured
     from sqlalchemy import func, select
+
+    from worldquant_harness.auth import _DEV_USER_ID
+    from worldquant_harness.db import _get_session_factory, init_db
+    from worldquant_harness.models import Task as TaskModel
+    from worldquant_harness.models import User
+    from worldquant_harness.wq_brain_client import WQBrainClient, is_configured
 
     await init_db()
     factory = _get_session_factory()

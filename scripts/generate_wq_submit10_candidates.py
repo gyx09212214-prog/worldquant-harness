@@ -19,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.alpha_tracker import compute_similarity
+from worldquant_harness.artifact_io import read_jsonl as _read_jsonl
 from worldquant_harness.expression_parser import extract_components, normalize_expression
+from worldquant_harness.wq_active_records import load_active_node_rows as _load_active_rows
 from worldquant_harness.wq_auto_mining import validate_wq_expression
-
+from worldquant_harness.wq_similarity import compute_similarity
 
 DEFAULT_ACTIVE_NODES = ROOT / "reports" / "wq_active_alpha_map_pnl_20260610_full" / "active_nodes.jsonl"
 DEFAULT_REPAIR_QUEUE = (
@@ -384,40 +385,6 @@ def _read_repair_records(path: Path) -> list[dict[str, Any]]:
                         "risk_flags": list(dict.fromkeys((row.get("risk_flags") or []) + ["policy_repair", "real_submit_candidate"])),
                     }
                 )
-    return rows
-
-
-def _load_active_rows(path: Path) -> list[dict[str, Any]]:
-    rows = []
-    for row in _read_jsonl(path):
-        expression = str(row.get("expression") or "").strip()
-        if not expression:
-            continue
-        rows.append(
-            {
-                "alpha_id": (row.get("alpha_ids") or [None])[0],
-                "status": "ACTIVE",
-                "expression": expression,
-                "metrics": row.get("metrics") or {},
-            }
-        )
-    return rows
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            rows.append(value)
     return rows
 
 

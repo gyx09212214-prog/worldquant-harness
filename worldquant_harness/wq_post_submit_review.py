@@ -6,12 +6,18 @@ import json
 import statistics
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from .expression_parser import extract_components, normalize_expression
-from .wq_policy_repair_planner import repair_candidate_concentration_risk
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import first_float as _first_number
+from .report_utils import ratio as _ratio
+from .wq_expression_utils import expression_components as _components
+from .wq_repair_screening import repair_candidate_concentration_risk
 from .wq_research_profile import load_profile
 
 SCHEMA_VERSION = 1
@@ -562,47 +568,6 @@ def _existing_dirs(paths: Iterable[Path]) -> list[Path]:
     return [Path(path) for path in paths if Path(path).exists()]
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if not path.is_file():
-        return rows
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            rows.append(value)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    if text:
-        text += "\n"
-    path.write_text(text, encoding="utf-8")
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _components(expression: str) -> dict[str, set[str]]:
-    try:
-        parts = extract_components(expression or "")
-        return {
-            "fields": {str(field) for field in parts.get("fields", set())},
-            "operators": {str(op) for op in parts.get("operators", set())},
-        }
-    except Exception:
-        return {"fields": set(), "operators": set()}
-
-
 def _final_status(row: dict[str, Any]) -> str:
     status = row.get("final_status") or row.get("platform_status") or row.get("status")
     if status:
@@ -676,19 +641,6 @@ def _row_priority(row: dict[str, Any]) -> int:
     return 1
 
 
-def _first_number(*values: Any) -> float | None:
-    for value in values:
-        if isinstance(value, (int, float)):
-            return float(value)
-        if value is None or value == "":
-            continue
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
 def _mean(values: Iterable[Any]) -> float | None:
     nums = [_first_number(value) for value in values]
     nums = [value for value in nums if value is not None]
@@ -699,12 +651,6 @@ def _median(values: Iterable[Any]) -> float | None:
     nums = [_first_number(value) for value in values]
     nums = [value for value in nums if value is not None]
     return round(statistics.median(nums), 6) if nums else None
-
-
-def _ratio(numerator: float, denominator: float) -> float | None:
-    if not denominator:
-        return None
-    return round(float(numerator) / float(denominator), 6)
 
 
 def _share(rows: list[dict[str, Any]], predicate: Any) -> float | None:
@@ -718,7 +664,3 @@ def _fmt(value: Any) -> str:
     if number is None:
         return ""
     return f"{number:.4f}".rstrip("0").rstrip(".")
-
-
-def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")

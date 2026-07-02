@@ -18,7 +18,6 @@ from worldquant_harness.wq_auto_mining import load_dotenv
 from worldquant_harness.wq_brain_client import get_client, is_configured
 from worldquant_harness.wq_post_submit_review import WQPostSubmitReviewConfig, build_post_submit_review
 
-
 BLOCKING_PLATFORM_CHECKS = {
     "LOW_SHARPE",
     "LOW_FITNESS",

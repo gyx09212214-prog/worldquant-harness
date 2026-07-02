@@ -16,10 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from worldquant_harness.artifact_io import write_jsonl as _write_jsonl
+from worldquant_harness.record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
 from worldquant_harness.wq_auto_mining import load_dotenv, write_json
 from worldquant_harness.wq_brain_client import get_client, is_configured
 from worldquant_harness.wq_brain_service import run_check_alphas
-
 
 DEFAULT_CHECK_STATUSES = {"eligible", "pending_correlation_check"}
 
@@ -231,15 +232,7 @@ def _should_check_row(row: dict) -> bool:
 
 
 def _dedupe_by_alpha_id(rows: list[dict]) -> list[dict]:
-    seen: set[str] = set()
-    unique: list[dict] = []
-    for row in rows:
-        alpha_id = str(row.get("alpha_id") or "")
-        if not alpha_id or alpha_id in seen:
-            continue
-        seen.add(alpha_id)
-        unique.append(row)
-    return unique
+    return _dedupe_rows_by_key(rows, lambda row: str(row.get("alpha_id") or ""), skip_empty=True)
 
 
 def _summary(records: list[dict], checked: dict[str, dict], output_path: Path, summary_path: Path | None) -> dict:
@@ -263,22 +256,11 @@ def _chunks(values: list[str], size: int) -> list[list[str]]:
     return [values[index : index + size] for index in range(0, len(values), size)]
 
 
-def _write_jsonl(path: Path, rows: list[dict]) -> None:
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    if text:
-        text += "\n"
-    path.write_text(text, encoding="utf-8")
-
-
 def _record_ledger(records: list[dict], *, account: str, source_run_id: str) -> dict:
     try:
-        from worldquant_harness.wq_alpha_ledger import record_api_check_records_sync
+        from worldquant_harness.wq_alpha_ledger import record_api_check_records_safe
 
-        return record_api_check_records_sync(
-            records,
-            settings={"account": account},
-            source_run_id=source_run_id,
-        )
+        return record_api_check_records_safe(records, account=account, source_run_id=source_run_id)
     except Exception as exc:
         return {"ok": False, "recorded": 0, "error": str(exc)}
 

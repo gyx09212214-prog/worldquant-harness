@@ -10,6 +10,10 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from .record_utils import safe_float as _safe_float
+from .report_utils import format_number as _format_number
+from .report_utils import markdown_cell as _md
+
 TRADING_DAYS_PER_YEAR = 252
 DEFAULT_BOOK_SIZE = 20_000_000.0
 
@@ -515,15 +519,6 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
-def _safe_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _cumulative_sum(values: Iterable[float]) -> list[float]:
     out: list[float] = []
     total = 0.0
@@ -545,12 +540,7 @@ def _max_drawdown_from_cumulative(values: list[float]) -> float:
 
 
 def _fmt(value: Any) -> str:
-    number = _safe_float(value)
-    if number is None:
-        return ""
-    if abs(number) >= 1000:
-        return f"{number:,.0f}"
-    return f"{number:.4f}".rstrip("0").rstrip(".")
+    return _format_number(value, coerce=_safe_float, large_commas=True)
 
 
 def _fmt_pct(value: Any) -> str:
@@ -558,7 +548,3 @@ def _fmt_pct(value: Any) -> str:
     if number is None:
         return ""
     return f"{number * 100:.2f}%"
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")

@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .expression_parser import normalize_expression
+from .wq_expression_utils import expression_component_lists
 
 CORRELATION_FAILURES = {"self_correlation_fail", "prod_correlation_fail"}
 BLOCKING_FAILURES = CORRELATION_FAILURES | {"high_similarity", "platform_alpha", "duplicate"}
@@ -53,11 +54,7 @@ def pattern_signature(expression: str) -> str:
 
 
 def expression_components(expression: str) -> dict:
-    components = extract_components(expression or "")
-    return {
-        "fields": sorted(str(item) for item in components.get("fields", [])),
-        "operators": sorted(str(item) for item in components.get("operators", [])),
-    }
+    return expression_component_lists(expression, strict=True)
 
 
 def classify_failures(record: dict) -> list[dict]:

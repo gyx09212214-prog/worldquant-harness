@@ -284,7 +284,12 @@ external model/API dependencies.
    the refresh command first, then run the same builders against that longer
    triage directory. The memory builders are deterministic and local-only: they
    write theme clusters, candidate recipes, pattern rules, and community skills,
-   but they do not call external LLM APIs, simulate, or submit.
+   but they do not call external LLM APIs, simulate, or submit. Community skill
+   memory now includes both the backward-compatible `community::*` routes and
+   finer `community_failure::*` failure-action routes, such as metric near-pass
+   overlay repair, correlation family-shift repair, template clone blocking,
+   low-coverage concentration repair, turnover/density repair, pending-check
+   gating, and duplicate blocking.
 
 5. Convert community/forum memory into a conservative submission policy:
 
@@ -298,8 +303,17 @@ external model/API dependencies.
 
    Community skills are used as gates, risk flags, and repair routes. Do not
    pass `community_skill_memory.jsonl` directly as a large candidate file.
-   The preferred presubmit path is still `presubmit-sequential`; pass the
-   generated `submission_policy.json` and the triage directory as context.
+The preferred presubmit path is still `presubmit-sequential`; pass the
+generated `submission_policy.json` and the triage directory as context.
+
+Each workflow run now writes detailed iteration audit artifacts by default:
+`iteration_audit.jsonl`, `iteration_audit_summary.json`, and
+`iteration_audit.md`. These files explain what was tweaked, the resulting
+metrics/check status, concrete failure causes, and next actions. The Markdown
+report and default JSONL withhold full alpha expressions and use expression
+hashes, field signatures, operators, and metrics instead. Use
+`--audit-include-expressions` only for local debugging when full expression
+traceability is required; use `--no-iteration-audit` to disable this layer.
 
 6. Optional Windows daily task:
 

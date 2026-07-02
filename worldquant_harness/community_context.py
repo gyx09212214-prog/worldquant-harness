@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import read_jsonl as _read_jsonl
+from .record_utils import nested as _nested
+
 DEFAULT_COMMUNITY_CONTEXT_DIR = Path(r"D:\tmp\worldquant_community_full_20260513\triage")
 DEFAULT_CONTEXT_LIMIT = 6
 DEFAULT_SEED_LIMIT = 0
@@ -462,23 +465,6 @@ def _knowledge_summary(text: str, title: str) -> str:
     return f"{title}: " + " | ".join(bullets)
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            rows.append(value)
-    return rows
-
-
 def _read_skills(paths: list[Path]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -555,15 +541,6 @@ def _normalize_token(token: str) -> str:
 def _expression_hash(expression: str) -> str:
     normalized = " ".join(expression.strip().split())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
-
-
-def _nested(row: dict[str, Any], *keys: str) -> Any:
-    current: Any = row
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
 
 
 def _optional_str(value: Any) -> str | None:

@@ -14,8 +14,15 @@ from .artifact_io import read_jsonl as _read_jsonl
 from .artifact_io import utc_now as _now
 from .artifact_io import write_json
 from .artifact_io import write_jsonl as _write_jsonl
-from .expression_parser import extract_components, normalize_expression
+from .expression_parser import normalize_expression
+from .record_utils import first_float as _first_float
+from .record_utils import first_stripped_text as _first_text
+from .record_utils import nested as _nested
+from .record_utils import safe_float as _safe_float
+from .report_utils import ratio as _ratio
+from .source_utils import source_run_id_from_cycle_path as _source_run_id
 from .wq_brain_service import submit_threshold_checks
+from .wq_expression_utils import expression_components as _components
 
 SCHEMA_VERSION = 1
 
@@ -1219,17 +1226,6 @@ def _check_value(row: dict[str, Any], name: str) -> float | None:
     return None
 
 
-def _components(expression: str) -> dict[str, set[str]]:
-    try:
-        raw = extract_components(expression)
-    except Exception:
-        raw = {"fields": set(), "operators": set()}
-    return {
-        "fields": {str(value) for value in raw.get("fields") or set() if value},
-        "operators": {str(value) for value in raw.get("operators") or set() if value},
-    }
-
-
 def _safe_normalize(expression: str | None) -> str:
     if not expression:
         return ""
@@ -1258,12 +1254,6 @@ def _record_id(source_file: Path, row_index: int, identity: str) -> str:
 
 def _hash(value: str) -> str:
     return hashlib.sha1(value.encode("utf-8", errors="ignore")).hexdigest()
-
-
-def _source_run_id(path: Path) -> str:
-    if path.parent.name.startswith("cycle_"):
-        return path.parent.parent.name
-    return path.parent.name
 
 
 def _repair_tag(parent_tag: str, neutralization: str, decay: int, truncation: float) -> str:
@@ -1322,38 +1312,11 @@ def _family_from_tag(tag: str | None) -> str | None:
     return text[:32]
 
 
-def _first_text(*values: Any) -> str | None:
-    for value in values:
-        if value is None:
-            continue
-        text = str(value).strip()
-        if text:
-            return text
-    return None
-
-
-def _first_float(*values: Any) -> float | None:
-    for value in values:
-        out = _safe_float(value)
-        if out is not None:
-            return out
-    return None
-
-
 def _first_dict(*values: Any) -> dict[str, Any]:
     for value in values:
         if isinstance(value, dict):
             return dict(value)
     return {}
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _mean(values: Any) -> float | None:
@@ -1362,21 +1325,6 @@ def _mean(values: Any) -> float | None:
     if not clean:
         return None
     return round(sum(clean) / len(clean), 6)
-
-
-def _ratio(numerator: int | float, denominator: int | float) -> float | None:
-    if not denominator:
-        return None
-    return round(float(numerator) / float(denominator), 6)
-
-
-def _nested(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
-    value: Any = row
-    for key in keys:
-        if not isinstance(value, dict):
-            return None
-        value = value.get(key)
-    return value
 
 
 def _dedupe_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .record_utils import safe_float as _safe_float
+from .report_utils import first_present as _first_present
+from .report_utils import markdown_cell as _md
+
 DATE_KEYS = {"date", "day", "timestamp", "time", "datetime", "x"}
 PNL_KEYS = {
     "pnl",
@@ -194,25 +198,5 @@ def _normalize_point(item: Any, *, index: int, source_path: str) -> dict[str, An
     }
 
 
-def _first_present(*values: Any) -> Any:
-    for value in values:
-        if value is not None and value != "":
-            return value
-    return None
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _safe_filename(value: str) -> str:
     return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in str(value))
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")

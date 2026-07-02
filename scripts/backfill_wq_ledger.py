@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from worldquant_harness.source_utils import source_run_id_from_report_path as _source_run_id
 from worldquant_harness.wq_alpha_ledger import record_api_check_record_sync, record_find_only_entry_sync
 from worldquant_harness.wq_auto_mining import load_dotenv
 
@@ -143,12 +144,6 @@ def _iter_jsonl(path: Path):
             continue
         if isinstance(value, dict) and value.get("expression"):
             yield value
-
-
-def _source_run_id(path: Path) -> str:
-    if path.parent.name == "reports":
-        return path.stem
-    return path.parent.name
 
 
 def _resolve_path(value: str) -> Path:

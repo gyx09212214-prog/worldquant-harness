@@ -16,7 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_json as _read_json
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .wq_expression_utils import expression_component_lists, expression_fields
 
 DEFAULT_ROUND_ID = "iqc_stage2_after_RRrQo83z_20260604"
 DEFAULT_ROUND_START_AFTER_ALPHA = "RRrQo83z"
@@ -196,7 +200,7 @@ def build_record(
     expression = str(source.get("expression") or result.get("expression") or "")
     fields = source.get("source_fields")
     if not isinstance(fields, list):
-        fields = sorted(str(field) for field in extract_components(expression).get("fields", []))
+        fields = expression_fields(expression)
     review_checks = submit_entry.get("review_checks") if isinstance(submit_entry.get("review_checks"), dict) else {}
     self_corr = _first_dict(source.get("self_correlation"), review_checks.get("self_correlation"))
     prod_corr = _first_dict(source.get("prod_correlation"), review_checks.get("prod_correlation"))
@@ -260,7 +264,7 @@ def enrich_record(record: dict[str, Any], active_row: dict[str, Any] | None, led
     expression = str(out.get("expression") or "")
     out["expression_normalized"] = normalize_expression(expression) if expression else ""
     if not out.get("source_fields"):
-        out["source_fields"] = sorted(str(field) for field in extract_components(expression).get("fields", []))
+        out["source_fields"] = expression_fields(expression)
     out["field_signature"] = field_signature(expression)
     return out
 
@@ -294,9 +298,9 @@ def build_novelty_audit(records: list[dict[str, Any]], active_rows: list[dict[st
         expression = str(row.get("expression") or "")
         if not expression:
             continue
-        components = extract_components(expression)
-        fields = sorted(str(field) for field in components.get("fields", []))
-        operators = sorted(str(op) for op in components.get("operators", []))
+        components = expression_component_lists(expression)
+        fields = components["fields"]
+        operators = components["operators"]
         field_counts.update(fields)
         operator_counts.update(operators)
         signature = field_signature(expression)
@@ -308,7 +312,7 @@ def build_novelty_audit(records: list[dict[str, Any]], active_rows: list[dict[st
     mpx_matches = [
         row.get("alpha_id")
         for row in rows
-        if MPX_SIGNATURE_FIELDS.issubset(set(str(field) for field in (row.get("source_fields") or extract_components(str(row.get("expression") or "")).get("fields", []))))
+        if MPX_SIGNATURE_FIELDS.issubset(set(str(field) for field in (row.get("source_fields") or expression_fields(str(row.get("expression") or "")))))
     ]
     return {
         "active_expression_count": len(expressions),
@@ -341,8 +345,7 @@ def _dedupe_rows_for_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def field_signature(expression: str) -> str:
-    fields = sorted(str(field) for field in extract_components(expression or "").get("fields", []))
-    return "|".join(fields)
+    return "|".join(expression_fields(expression))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -384,36 +387,6 @@ def _submission_entry_succeeded(entry: dict[str, Any]) -> bool:
         return True
     status = str(entry.get("final_status") or entry.get("platform_status") or entry.get("status") or "").upper()
     return status in {"ACTIVE", "SUBMITTED"}
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            rows.append(json.loads(line))
-        except Exception:
-            continue
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = "\n".join(json.dumps(row, ensure_ascii=False, default=str, sort_keys=True) for row in rows)
-    path.write_text(payload + ("\n" if payload else ""), encoding="utf-8")
 
 
 def _write_markdown(path: Path, summary: dict[str, Any]) -> None:

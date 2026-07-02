@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,59 +10,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.wq_auto_mining import validate_wq_expression
-
+from worldquant_harness.wq_candidate_generation import run_static_candidate_generator
 
 DEFAULT_OUTPUT = ROOT / "reports" / "wq_submit5_more_20260611" / "balance_repair_candidates.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    output = Path(args.output)
-    rows: list[dict[str, Any]] = []
-    invalid: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    for row in _records()[: args.limit]:
-        key = row["expression"] + "||" + json.dumps(row.get("simulation_settings") or {}, sort_keys=True)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            validate_wq_expression(row["expression"])
-        except Exception as exc:
-            invalid.append({**row, "validation_error": str(exc)})
-            continue
-        row["candidate_rank"] = len(rows) + 1
-        rows.append(row)
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows) + "\n",
-        encoding="utf-8",
+    return run_static_candidate_generator(
+        argv,
+        records_func=_records,
+        default_output=DEFAULT_OUTPUT,
+        default_limit=12,
+        description='Generate balanced WQ repair candidates',
+        limit_valid_count=False,
     )
-    summary = {
-        "ok": True,
-        "output": str(output),
-        "written": len(rows),
-        "invalid": len(invalid),
-        "tags": [row["tag"] for row in rows],
-    }
-    output.with_suffix(".summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    if invalid:
-        output.with_suffix(".invalid.jsonl").write_text(
-            "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in invalid) + "\n",
-            encoding="utf-8",
-        )
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
-
-
-def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate balanced WQ repair candidates")
-    parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
-    parser.add_argument("--limit", type=int, default=12)
-    return parser.parse_args(argv)
 
 
 def _add(rows: list[dict[str, Any]], tag: str, family: str, expr: str, settings: dict[str, Any], rationale: str) -> None:

@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.alpha_tracker import compute_similarity
-from worldquant_harness.wq_auto_mining import append_jsonl, load_dotenv, validate_wq_expression, write_json as _write_json
+from scripts.check_wq_generated_alphas import check_generated_alphas
+from worldquant_harness.wq_auto_mining import append_jsonl, load_dotenv, validate_wq_expression
+from worldquant_harness.wq_auto_mining import write_json as _write_json
 from worldquant_harness.wq_brain_client import get_client, is_configured
 from worldquant_harness.wq_brain_service import run_single_simulation
-from scripts.check_wq_generated_alphas import check_generated_alphas
-
+from worldquant_harness.wq_similarity import compute_similarity
 
 EXCLUDED_EXPRESSIONS = [
     "rank((high - close) / (high - low) * volume / ts_mean(volume, 20))",

@@ -24,6 +24,7 @@ from .expression_parser import normalize_expression, parse_expression
 from .llm_service import clean_expression
 from .wq_brain_client import SUBMIT_THRESHOLDS, get_client, is_configured
 from .wq_brain_service import run_single_simulation, safe_float, submit_threshold_checks
+from .wq_progress import ascii_progress_message as _ascii_progress_message
 from .wq_review import parse_review_checks, primary_failure_kind, review_has_pending_correlation
 
 logger = logging.getLogger(__name__)
@@ -1118,17 +1119,3 @@ def best_entry(existing: dict | None, candidate: dict) -> dict:
 def config_to_dict(config: WQAutoMiningConfig) -> dict:
     data = asdict(config)
     return {key: str(value) if isinstance(value, Path) else value for key, value in data.items()}
-
-
-def _ascii_progress_message(progress: int, message: str) -> str:
-    if "并发限制" in message:
-        return "Concurrent simulation limit; waiting before retry"
-    if "速率限制" in message:
-        return "Rate limited; waiting before retry"
-    if "连接异常" in message:
-        return "Connection error; waiting before retry"
-    if "模拟完成" in message:
-        return "Simulation completed"
-    if "模拟进行中" in message:
-        return f"Simulation running ({progress}%)"
-    return message

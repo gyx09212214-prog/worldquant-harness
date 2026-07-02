@@ -7,18 +7,28 @@ submission endpoints.
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import json
 import re
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_csv as _write_csv
+from .artifact_io import write_json as _write_json
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
+from .record_utils import first_float as _safe_float
+from .record_utils import first_text as _first_text
+from .record_utils import nested as _nested
+from .source_utils import source_run_id_from_platform_or_path as _source_run_id
+from .wq_expression_utils import expression_components as _components
+from .wq_platform_artifacts import fetch_platform_alphas as _fetch_platform_alphas
+from .wq_platform_artifacts import local_file_inventory as _local_file_inventory
 from .wq_review import parse_review_checks, primary_failure_kind
 
 SCHEMA_VERSION = 1
@@ -132,7 +142,7 @@ def collect_complete_submission_records(
         "summary": str(output_dir / "summary.json"),
         "markdown": str(output_dir / "summary.md"),
     }
-    _write_csv(Path(files["local_file_inventory"]), inventory)
+    _write_csv(Path(files["local_file_inventory"]), inventory, encoding="utf-8")
     _write_jsonl(Path(files["platform_alphas"]), platform_result.get("alphas") or [])
     _write_jsonl(Path(files["alpha_details"]), platform_result.get("details") or [])
     _write_jsonl(Path(files["submission_events"]), events)
@@ -169,16 +179,7 @@ def discover_local_files(reports_dir: Path | str) -> list[Path]:
 
 
 def local_file_inventory(files: Iterable[Path]) -> list[dict[str, Any]]:
-    return [
-        {
-            "path": str(path),
-            "name": path.name,
-            "source_type": source_type_for_path(path),
-            "size_bytes": path.stat().st_size,
-            "modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
-        }
-        for path in files
-    ]
+    return _local_file_inventory(files, source_type_for_path=source_type_for_path)
 
 
 def collect_local_events(files: Iterable[Path], *, limit: int = 0) -> list[dict[str, Any]]:
@@ -271,25 +272,7 @@ def collect_platform_readonly(
 
 
 def fetch_platform_alphas(client: Any, *, limit: int = 0) -> list[dict[str, Any]]:
-    alphas: list[dict[str, Any]] = []
-    offset = 0
-    page_size = 100
-    while True:
-        payload = client.get_json(
-            "/users/self/alphas",
-            params={"limit": page_size, "offset": offset, "order": "-dateCreated"},
-        )
-        results = payload.get("results") if isinstance(payload, dict) else []
-        if not isinstance(results, list) or not results:
-            break
-        alphas.extend(row for row in results if isinstance(row, dict))
-        if limit and len(alphas) >= limit:
-            return alphas[:limit]
-        offset += len(results)
-        total = payload.get("count") if isinstance(payload, dict) else None
-        if isinstance(total, int) and offset >= total:
-            break
-    return alphas
+    return _fetch_platform_alphas(client, limit=limit)
 
 
 def detail_ids_to_fetch(local_events: list[dict[str, Any]], platform_alphas: list[dict[str, Any]]) -> list[str]:
@@ -920,15 +903,10 @@ def _retrieval_text(row: dict[str, Any]) -> str:
 
 
 def _dedupe_memory(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for row in rows:
-        key = (str(row.get("expression_hash") or ""), str(row.get("experience_label") or ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+    return _dedupe_rows_by_key(
+        rows,
+        lambda row: (str(row.get("expression_hash") or ""), str(row.get("experience_label") or "")),
+    )
 
 
 def _top_values(values: Iterable[Any]) -> list[str]:
@@ -1247,16 +1225,6 @@ def _alpha_id_from(row: dict[str, Any]) -> str | None:
     return str(value).strip() if value else None
 
 
-def _components(expression: str) -> dict[str, set[str]]:
-    if not expression:
-        return {"fields": set(), "operators": set()}
-    try:
-        parsed = extract_components(expression)
-        return {"fields": set(parsed.get("fields") or set()), "operators": set(parsed.get("operators") or set())}
-    except Exception:
-        return {"fields": set(), "operators": set()}
-
-
 def _normalize_expr(expression: str) -> str:
     if not expression:
         return ""
@@ -1274,13 +1242,6 @@ def _event_id(source_file: str, row_index: int | None, alpha_id: str | None, exp
     return _hash("|".join(str(value or "") for value in (source_file, row_index, alpha_id, expression, source_type)))
 
 
-def _source_run_id(source_file: str) -> str:
-    if str(source_file).startswith("platform:"):
-        return "platform"
-    path = Path(source_file)
-    return path.parent.name if path.parent.name else path.stem
-
-
 def _best_date(events: list[dict[str, Any]], key: str) -> str | None:
     values = [str(event.get(key)) for event in events if event.get(key)]
     return sorted(values)[-1] if values else None
@@ -1294,17 +1255,6 @@ def _margin(value: Any, limit: Any) -> float | None:
     return round(left - right, 6)
 
 
-def _safe_float(*values: Any) -> float | None:
-    for value in values:
-        try:
-            if value is None or value == "":
-                continue
-            return float(value)
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
 def _detail_value(detail: Any, kind: str) -> float | None:
     text = str(detail or "")
     if not text:
@@ -1316,13 +1266,6 @@ def _detail_value(detail: Any, kind: str) -> float | None:
     return _safe_float(match.group(1)) if match else None
 
 
-def _first_text(*values: Any) -> str | None:
-    for value in values:
-        if value is not None and value != "":
-            return str(value)
-    return None
-
-
 def _first_known(*values: Any) -> Any:
     for value in values:
         if value is not None and value != "":
@@ -1330,62 +1273,7 @@ def _first_known(*values: Any) -> Any:
     return None
 
 
-def _nested(payload: Any, *keys: str) -> Any:
-    current = payload
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
 def _ratio(num: int, den: int) -> float | None:
     if den <= 0:
         return None
     return round(num / den, 4)
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows)
-    path.write_text(text + ("\n" if text else ""), encoding="utf-8")
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    keys: list[str] = []
-    for row in rows:
-        for key in row:
-            if key not in keys:
-                keys.append(key)
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=keys or ["empty"], extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

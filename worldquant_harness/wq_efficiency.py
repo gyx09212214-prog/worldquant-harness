@@ -6,7 +6,8 @@ import hashlib
 import json
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .expression_parser import normalize_expression
+from .wq_expression_utils import field_signature
 from .wq_failure_memory import expression_hash
 
 IDENTITY_VERSION = 1
@@ -38,14 +39,6 @@ def candidate_uid(expression: str, settings: dict[str, Any] | None = None) -> st
     params = settings_hash(settings)
     raw = f"wq-alpha-candidate-v{IDENTITY_VERSION}|{expr_hash}|{params}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
-
-
-def field_signature(expression: str) -> str:
-    try:
-        fields = sorted(str(field) for field in extract_components(expression or "").get("fields", []))
-    except Exception:
-        fields = []
-    return "|".join(fields)
 
 
 def settings_from_row(row: dict[str, Any], default_settings: dict[str, Any] | None = None) -> dict[str, Any]:

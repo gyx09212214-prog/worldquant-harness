@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.alpha_tracker import compute_similarity
 from worldquant_harness.expression_parser import extract_components, normalize_expression
 from worldquant_harness.wq_alpha_detail import render_probe_markdown, summarize_alpha_probe, write_probe_outputs
 from worldquant_harness.wq_auto_mining import load_dotenv

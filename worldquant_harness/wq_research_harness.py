@@ -7,7 +7,6 @@ It never calls WorldQuant submit endpoints.
 
 from __future__ import annotations
 
-import csv
 import json
 import math
 import secrets
@@ -17,10 +16,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import csv_value as _csv_value
+from .artifact_io import read_json as _read_json
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_csv as _write_csv
+from .artifact_io import write_json as _write_json
+from .record_utils import first_float as _first_number
+from .record_utils import nested as _nested
+from .record_utils import safe_float as _safe_float
+from .report_utils import matching_reason_count as _matching_reason_count
+from .report_utils import ratio as _ratio
 from .wq_profile_evolver import evolve_research_profile
 from .wq_research_miner import field_signature
+from .wq_research_paths import resolve_research_experiment_dir
 from .wq_research_profile import default_research_profile
-from .wq_research_sandbox import DEFAULT_EXPERIMENT_ROOT, ResearchSandboxPaths, new_research_experiment
+from .wq_research_sandbox import ResearchSandboxPaths, new_research_experiment
 
 SCHEMA_VERSION = 1
 
@@ -144,13 +155,15 @@ def run_wq_harness_evaluation(config: WQHarnessEvalConfig) -> dict[str, Any]:
     }
 
     eval_dir.mkdir(parents=True, exist_ok=True)
-    _write_csv(eval_dir / "eval_records.csv", records, _eval_record_fields())
-    _write_csv(eval_dir / "eval_summary.csv", [_flatten_summary_row(summary)], None)
-    _write_csv(eval_dir / "summary_by_field_signature.csv", field_summary["rows"], None)
+    _write_csv(eval_dir / "eval_records.csv", records, _eval_record_fields(), encoding="utf-8", value_transform=_csv_value)
+    _write_csv(eval_dir / "eval_summary.csv", [_flatten_summary_row(summary)], None, encoding="utf-8", value_transform=_csv_value)
+    _write_csv(eval_dir / "summary_by_field_signature.csv", field_summary["rows"], None, encoding="utf-8", value_transform=_csv_value)
     _write_csv(
         eval_dir / "summary_by_reject_reason.csv",
         [{"reason": reason, "count": count} for reason, count in sorted(reject_counts.items())],
         None,
+        encoding="utf-8",
+        value_transform=_csv_value,
     )
     _write_json(eval_dir / "eval_summary.json", summary)
     _write_json(eval_dir / "gate_report.json", gate)
@@ -817,15 +830,6 @@ def _append_bias(config: dict[str, Any], value: str) -> None:
     config["priority_biases"] = biases
 
 
-def _matching_reason_count(counts: Counter[str], targets: set[str]) -> int:
-    total = 0
-    for reason, count in counts.items():
-        lowered = str(reason).lower()
-        if lowered in targets or any(target in lowered for target in targets):
-            total += count
-    return total
-
-
 def _exact_reason_count(counts: Counter[str], targets: set[str]) -> int:
     return sum(count for reason, count in counts.items() if str(reason).lower() in targets)
 
@@ -878,18 +882,7 @@ def _resolve_eval_dir(experiment_dir: Path, eval_dir: Path | None) -> Path | Non
 
 
 def _resolve_experiment_dir(experiment: Path) -> Path:
-    path = Path(experiment)
-    if (path / "experiment.yaml").is_file():
-        return path
-    if path.is_file():
-        return path.parent
-    candidate = DEFAULT_EXPERIMENT_ROOT / str(experiment)
-    if (candidate / "experiment.yaml").is_file():
-        return candidate
-    named_candidate = DEFAULT_EXPERIMENT_ROOT / path.name
-    if (named_candidate / "experiment.yaml").is_file():
-        return named_candidate
-    raise FileNotFoundError(f"experiment not found: {experiment}")
+    return resolve_research_experiment_dir(experiment)
 
 
 def _manifest(
@@ -1000,96 +993,3 @@ def _eval_record_fields() -> list[str]:
         "presubmit_accepted",
         "count",
     ]
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str] | None) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if fieldnames is None:
-        keys: list[str] = []
-        for row in rows:
-            for key in row:
-                if key not in keys:
-                    keys.append(key)
-        fieldnames = keys or ["empty"]
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({key: _csv_value(row.get(key)) for key in fieldnames})
-
-
-def _csv_value(value: Any) -> Any:
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, default=str)
-    return value
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {}
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        return {}
-    return json.loads(text)
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def _ratio(numerator: float | int, denominator: float | int) -> float | None:
-    try:
-        denominator_float = float(denominator)
-        if denominator_float == 0.0:
-            return None
-        return round(float(numerator) / denominator_float, 6)
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _first_number(*values: Any) -> float | None:
-    for value in values:
-        parsed = _safe_float(value)
-        if parsed is not None:
-            return parsed
-    return None
-
-
-def _nested(payload: dict[str, Any], *keys: str) -> Any:
-    current: Any = payload
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

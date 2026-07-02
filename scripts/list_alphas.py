@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """List all WQ BRAIN alphas from the API."""
-import json, urllib.request
+import json
+import urllib.request
 
 r = urllib.request.urlopen("http://localhost:8003/api/v1/wq-brain/submitted-alphas")
 d = json.loads(r.read())

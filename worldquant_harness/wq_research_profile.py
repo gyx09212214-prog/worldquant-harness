@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import write_json as _write_json
 from .wq_reference_catalog import DEFAULT_REFERENCE_DIR
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -295,11 +296,6 @@ def _repo_relative(path: Path) -> str:
         return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
     except ValueError:
         return str(path)
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
 
 
 def _now() -> str:

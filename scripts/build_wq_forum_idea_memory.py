@@ -12,7 +12,7 @@ import argparse
 import itertools
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -730,7 +730,7 @@ def _markdown_report(
             f"- Matched records: {analyzed['manifest']['matched_records']}",
             f"- Multi-label memberships: {analyzed['manifest']['multi_label_memberships']}",
             f"- Unmatched records: {analyzed['manifest']['unmatched_records']}",
-            f"- No external LLM: true",
+            "- No external LLM: true",
             "",
             "## Theme Map",
         ]

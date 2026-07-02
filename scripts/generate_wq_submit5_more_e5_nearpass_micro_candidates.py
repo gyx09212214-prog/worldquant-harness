@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,57 +10,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.wq_auto_mining import validate_wq_expression
-
+from worldquant_harness.wq_candidate_generation import run_static_candidate_generator
 
 DEFAULT_OUTPUT = ROOT / "reports" / "wq_submit5_more_20260611" / "e5_nearpass_micro_candidates.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    output = Path(args.output)
-    rows: list[dict[str, Any]] = []
-    invalid: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in _records():
-        key = row["expression"] + "||" + json.dumps(row.get("simulation_settings") or {}, sort_keys=True)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            validate_wq_expression(row["expression"])
-        except Exception as exc:
-            invalid.append({**row, "validation_error": str(exc)})
-            continue
-        row["candidate_rank"] = len(rows) + 1
-        rows.append(row)
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in rows) + "\n",
-        encoding="utf-8",
+    return run_static_candidate_generator(
+        argv,
+        records_func=_records,
+        default_output=DEFAULT_OUTPUT,
+        default_limit=None,
+        description='Generate e5 near-pass micro repair candidates',
+        limit_valid_count=False,
     )
-    summary = {
-        "ok": True,
-        "output": str(output),
-        "written": len(rows),
-        "invalid": len(invalid),
-        "tags": [row["tag"] for row in rows],
-    }
-    output.with_suffix(".summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    if invalid:
-        output.with_suffix(".invalid.jsonl").write_text(
-            "\n".join(json.dumps(row, ensure_ascii=False, default=str) for row in invalid) + "\n",
-            encoding="utf-8",
-        )
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
-
-
-def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate e5 near-pass micro repair candidates")
-    parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
-    return parser.parse_args(argv)
 
 
 def _add(
@@ -171,15 +132,15 @@ def _records() -> list[dict[str, Any]]:
     _add(
         rows,
         "e5-liq-spy03-ret90-d12",
-        f"rank(group_neutralize(0.13 * ts_rank(anl4_adjusted_netincome_ft / enterprise_value, 80) + "
-        f"0.18 * ts_rank(actual_cashflow_per_share_value_quarterly / close, 90) + "
-        f"0.13 * rank(-1 * credit_risk_premium_indicator) + "
-        f"0.12 * rank(-1 * earnings_certainty_rank_derivative) + "
-        f"0.12 * rank(-1 * ts_decay_linear(close / vwap, 5)) + "
-        f"0.04 * rank(volume / adv20) + "
-        f"0.03 * rank(-1 * correlation_last_30_days_spy) - "
-        f"0.11 * ts_rank(high / low, 40) - "
-        f"0.12 * ts_rank(returns, 90), industry))",
+        "rank(group_neutralize(0.13 * ts_rank(anl4_adjusted_netincome_ft / enterprise_value, 80) + "
+        "0.18 * ts_rank(actual_cashflow_per_share_value_quarterly / close, 90) + "
+        "0.13 * rank(-1 * credit_risk_premium_indicator) + "
+        "0.12 * rank(-1 * earnings_certainty_rank_derivative) + "
+        "0.12 * rank(-1 * ts_decay_linear(close / vwap, 5)) + "
+        "0.04 * rank(volume / adv20) + "
+        "0.03 * rank(-1 * correlation_last_30_days_spy) - "
+        "0.11 * ts_rank(high / low, 40) - "
+        "0.12 * ts_rank(returns, 90), industry))",
         d12,
         "Use a smaller SPY-correlation residual than the prior concentration-failing version.",
     )

@@ -94,6 +94,9 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--post-submit-baseline-roots", nargs="*", default=[], help="Run roots used as baseline for post-submit review")
     parser.add_argument("--post-submit-profile-dir", default="", help="Research profile dir used for post-submit profile candidate context")
     parser.add_argument("--post-submit-window-days", type=int, default=14)
+    parser.add_argument("--no-iteration-audit", action="store_true", help="Disable detailed iteration audit artifacts")
+    parser.add_argument("--audit-history-limit", type=int, default=20, help="Number of sibling run audit summaries used for lightweight history baseline")
+    parser.add_argument("--audit-include-expressions", action="store_true", help="Include full expressions in iteration_audit.jsonl; Markdown remains hash/field based")
 
 
 def _config_from_args(args: argparse.Namespace) -> WQAgentWorkflowConfig:
@@ -149,6 +152,9 @@ def _config_from_args(args: argparse.Namespace) -> WQAgentWorkflowConfig:
         post_submit_baseline_roots=[_resolve_path(path) for path in args.post_submit_baseline_roots],
         post_submit_profile_dir=_resolve_path(args.post_submit_profile_dir) if args.post_submit_profile_dir else None,
         post_submit_window_days=max(1, args.post_submit_window_days),
+        iteration_audit_enabled=not args.no_iteration_audit,
+        audit_history_limit=max(0, args.audit_history_limit),
+        audit_include_expressions=bool(args.audit_include_expressions),
     )
 
 

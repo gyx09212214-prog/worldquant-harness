@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .artifact_io import read_jsonl as _read_jsonl
+from .artifact_io import utc_now as _now
+from .artifact_io import write_json, write_text
+from .artifact_io import write_jsonl as _write_jsonl
+from .expression_parser import normalize_expression
+from .record_utils import dedupe_rows_by_key as _dedupe_rows_by_key
+from .record_utils import nested as _nested
+from .record_utils import safe_float as _safe_float
+from .source_utils import source_run_id_from_cycle_path as _source_run_id
+from .wq_expression_utils import expression_components as _components
+from .wq_failure_taxonomy import LOW_COVERAGE_PREFIXES, failed_check_names, failure_kind_from_check_names
 from .wq_history_experience import canonical_failure_kind
 
 SCHEMA_VERSION = 1
@@ -34,7 +42,6 @@ EVENT_FIELDS = {
     "scl12_buzz_fast_d1",
     "scl12_sentiment_fast_d1",
 }
-LOW_COVERAGE_PREFIXES = ("rp_css_", "rp_ess_", "pcr_")
 PRICE_VOLUME_FIELDS = {"adv20", "close", "high", "low", "open", "volume", "vwap"}
 GROUP_FIELDS = {"industry", "sector", "subindustry", "market"}
 
@@ -70,7 +77,7 @@ def build_submission_experience(config: WQSubmissionExperienceConfig) -> dict[st
     }
     _write_jsonl(Path(files["records"]), records)
     _write_jsonl(Path(files["memory"]), memory)
-    Path(files["rules"]).write_text(json.dumps(rules, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    write_json(Path(files["rules"]), rules)
 
     result = {
         "schema_version": SCHEMA_VERSION,
@@ -86,8 +93,8 @@ def build_submission_experience(config: WQSubmissionExperienceConfig) -> dict[st
         "summary": summary,
         "files": files,
     }
-    Path(files["summary"]).write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-    Path(files["markdown"]).write_text(render_submission_experience_markdown(result, rules), encoding="utf-8")
+    write_json(Path(files["summary"]), result)
+    write_text(Path(files["markdown"]), render_submission_experience_markdown(result, rules))
     return result
 
 
@@ -493,47 +500,12 @@ def _unique_near_passes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def _components(expression: str) -> dict[str, set[str]]:
-    try:
-        raw = extract_components(expression)
-    except Exception:
-        raw = {"fields": set(), "operators": set()}
-    return {
-        "fields": {str(value) for value in raw.get("fields") or set() if value},
-        "operators": {str(value) for value in raw.get("operators") or set() if value},
-    }
-
-
 def _failed_check_names(row: dict[str, Any]) -> list[str]:
-    checks = row.get("failed_platform_checks") or []
-    if not checks:
-        checks = [
-            check for check in row.get("is_checks") or _nested(row, ("result", "is_metrics", "checks")) or []
-            if isinstance(check, dict) and str(check.get("result") or "").upper() == "FAIL"
-        ]
-    names = []
-    for check in checks:
-        if isinstance(check, dict) and check.get("name"):
-            names.append(str(check["name"]).upper())
-    return sorted(set(names))
+    return failed_check_names(row)
 
 
 def _failure_from_checks(checks: list[str]) -> str:
-    priority = [
-        ("SELF_CORRELATION", "self_correlation_fail"),
-        ("PROD_CORRELATION", "prod_correlation_fail"),
-        ("CONCENTRATED_WEIGHT", "concentrated_weight"),
-        ("LOW_SUB_UNIVERSE_SHARPE", "sub_universe_fail"),
-        ("LOW_SUB_UNIVERSE_FITNESS", "sub_universe_fail"),
-        ("HIGH_TURNOVER", "high_turnover"),
-        ("LOW_SHARPE", "low_sharpe"),
-        ("LOW_FITNESS", "low_fitness"),
-    ]
-    check_set = set(checks)
-    for check, failure in priority:
-        if check in check_set:
-            return failure
-    return "platform_check_fail"
+    return failure_kind_from_check_names(checks) or "platform_check_fail"
 
 
 def _check_result(row: dict[str, Any], name: str) -> str | None:
@@ -565,21 +537,6 @@ def _rule_count(rules: dict[str, Any]) -> int:
     return sum(len(rules.get(key) or []) for key in ("field_rules", "structure_rules", "repair_rules"))
 
 
-def _source_run_id(path: Path) -> str:
-    if path.parent.name.startswith("cycle_"):
-        return path.parent.parent.name
-    return path.parent.name
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _mean(values) -> float | None:
     clean = [_safe_float(value) for value in values]
     nums = [value for value in clean if value is not None]
@@ -588,60 +545,18 @@ def _mean(values) -> float | None:
     return round(sum(nums) / len(nums), 6)
 
 
-def _nested(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
-    value: Any = row
-    for key in keys:
-        if not isinstance(value, dict):
-            return None
-        value = value.get(key)
-    return value
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows = []
-    for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        text = line.strip()
-        if not text or not text.startswith("{"):
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in rows),
-        encoding="utf-8",
+def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return _dedupe_rows_by_key(
+        records,
+        lambda row: (row.get("alpha_id"), row.get("expression_hash"), row.get("source_type"), row.get("source_run_id")),
     )
 
 
-def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    seen = set()
-    for row in records:
-        key = (row.get("alpha_id"), row.get("expression_hash"), row.get("source_type"), row.get("source_run_id"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
-
-
 def _dedupe_memory(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    seen = set()
-    for row in rows:
-        key = (row.get("memory_kind"), row.get("failure_kind"), row.get("expression_hash"), row.get("field_signature"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(row)
-    return out
+    return _dedupe_rows_by_key(
+        rows,
+        lambda row: (row.get("memory_kind"), row.get("failure_kind"), row.get("expression_hash"), row.get("field_signature")),
+    )
 
 
 def _safe_normalize(expression: str) -> str | None:
@@ -657,7 +572,3 @@ def _record_id(source_file: Path, row_index: int, expression: str) -> str:
 
 def _hash(text: str) -> str:
     return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

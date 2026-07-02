@@ -12,77 +12,18 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .expression_parser import extract_components, normalize_expression
+from .expression_parser import normalize_expression
+from .wq_expression_utils import expression_component_lists
+from .wq_expression_utils import strip_outer_rank as _strip_outer_rank
+from .wq_field_groups import (
+    ANALYST_FIELDS,
+    FUNDAMENTAL_FIELDS,
+    LIQUIDITY_FIELDS,
+    MODEL_DERIVATIVE_FIELDS,
+    OPTION_FIELDS,
+    PRICE_FIELDS,
+)
 
-PRICE_FIELDS = {"close", "open", "high", "low", "returns", "vwap"}
-LIQUIDITY_FIELDS = {"volume", "adv20", "adv60", "adv120", "turnover"}
-OPTION_FIELDS = {
-    "implied_volatility_call_30",
-    "implied_volatility_call_60",
-    "implied_volatility_call_90",
-    "implied_volatility_call_120",
-    "implied_volatility_call_180",
-    "implied_volatility_put_30",
-    "implied_volatility_put_60",
-    "implied_volatility_put_90",
-    "implied_volatility_put_120",
-    "implied_volatility_put_180",
-    "pcr_oi_5",
-    "pcr_oi_10",
-    "pcr_oi_20",
-    "pcr_oi_30",
-    "pcr_oi_60",
-    "pcr_oi_90",
-    "pcr_oi_120",
-    "pcr_oi_180",
-    "pcr_volume_5",
-    "pcr_volume_10",
-    "pcr_volume_20",
-    "pcr_volume_30",
-    "pcr_volume_60",
-    "pcr_volume_90",
-    "pcr_volume_120",
-    "pcr_volume_180",
-}
-ANALYST_FIELDS = {
-    "actual_eps_value_quarterly",
-    "actual_cashflow_per_share_value_quarterly",
-    "anl4_af_eps_value",
-    "anl4_afv4_eps_mean",
-    "anl4_adjusted_netincome_ft",
-    "change_in_eps_surprise",
-    "earnings_momentum_composite_score",
-    "snt1_d1_netearningsrevision",
-}
-FUNDAMENTAL_FIELDS = {
-    "assets",
-    "cap",
-    "capex",
-    "cashflow",
-    "cashflow_fin",
-    "cashflow_op",
-    "debt",
-    "debt_lt",
-    "ebit",
-    "ebitda",
-    "enterprise_value",
-    "gross_profit",
-    "income",
-    "liabilities",
-    "net_income",
-    "operating_income",
-    "receivables",
-    "sales",
-}
-MODEL_DERIVATIVE_FIELDS = {
-    "analyst_revision_rank_derivative",
-    "cashflow_efficiency_rank_derivative",
-    "composite_factor_score_derivative",
-    "earnings_certainty_rank_derivative",
-    "growth_potential_rank_derivative",
-    "multi_factor_acceleration_score_derivative",
-    "relative_valuation_rank_derivative",
-}
 SENTIMENT_TERMS = {"news", "sentiment", "buzz", "scl", "snt"}
 RISK_TERMS = {"beta", "volatility", "vol", "risk", "std"}
 
@@ -552,22 +493,6 @@ def _expanded_pair_targets(seeds: list[EvolutionSeed]) -> list[tuple[str, str]]:
     return fallback or [("unknown", "unknown")]
 
 
-def _strip_outer_rank(expression: str) -> str:
-    text = expression.strip()
-    lower = text.lower()
-    if not lower.startswith("rank(") or not text.endswith(")"):
-        return text
-    depth = 0
-    for index, char in enumerate(text):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0 and index != len(text) - 1:
-                return text
-    return text[text.find("(") + 1:-1].strip()
-
-
 def _fields_for_template(mode: str) -> set[str]:
     fields = {"returns"}
     if mode in {
@@ -624,13 +549,8 @@ def _domain_counts(seeds: list[EvolutionSeed]) -> dict[str, int]:
 
 
 def _components(expression: str) -> tuple[list[str], list[str]]:
-    try:
-        components = extract_components(expression)
-    except Exception:
-        return [], []
-    fields = sorted(str(field) for field in components.get("fields", []))
-    operators = sorted(str(op) for op in components.get("operators", []))
-    return fields, operators
+    components = expression_component_lists(expression)
+    return components["fields"], components["operators"]
 
 
 def _clean_expression(expression: str) -> str:

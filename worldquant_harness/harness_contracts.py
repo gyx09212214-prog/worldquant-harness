@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .artifact_io import read_jsonl as _artifact_read_jsonl
+
 HARNESS_SCHEMA_VERSION = 1
 
 HARNESS_ROLES = {
@@ -338,21 +340,7 @@ def read_json(path: Path | str) -> dict[str, Any]:
 
 
 def read_jsonl(path: Path | str) -> list[dict[str, Any]]:
-    file_path = Path(path)
-    if not file_path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for raw in file_path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        text = raw.strip()
-        if not text or not text.startswith("{"):
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
+    return _artifact_read_jsonl(path)
 
 
 def write_json(path: Path | str, payload: dict[str, Any]) -> None:

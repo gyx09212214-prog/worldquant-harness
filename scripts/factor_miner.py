@@ -13,11 +13,9 @@ Usage from skill (via bash):
   "
 """
 
-import json
 import re
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 
@@ -48,7 +46,7 @@ def check_health(server: str = DEFAULT_SERVER) -> dict:
     return r.json()
 
 
-def submit_task(server: str, expression: str, params: dict) -> Optional[str]:
+def submit_task(server: str, expression: str, params: dict) -> str | None:
     payload = {"prompt": expression, **params}
     for attempt in range(6):
         try:
@@ -64,7 +62,7 @@ def submit_task(server: str, expression: str, params: dict) -> Optional[str]:
     return None
 
 
-def poll_task(server: str, task_id: str, timeout: int = 600) -> Optional[dict]:
+def poll_task(server: str, task_id: str, timeout: int = 600) -> dict | None:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -79,14 +77,14 @@ def poll_task(server: str, task_id: str, timeout: int = 600) -> Optional[dict]:
     return None
 
 
-def submit_and_poll(server: str, expression: str, params: dict, timeout: int = 600) -> Optional[dict]:
+def submit_and_poll(server: str, expression: str, params: dict, timeout: int = 600) -> dict | None:
     task_id = submit_task(server, expression, params)
     if not task_id:
         return None
     return poll_task(server, task_id, timeout)
 
 
-def parse_result(result: dict, expression: str, params: dict) -> Optional[Factor]:
+def parse_result(result: dict, expression: str, params: dict) -> Factor | None:
     if not result or result.get("status") != "completed":
         return None
     try:
@@ -94,7 +92,6 @@ def parse_result(result: dict, expression: str, params: dict) -> Optional[Factor
         bs = r.get("backtest_summary", {})
         interp = r.get("interpretation", {})
         wq = r.get("wq_brain", {})
-        is_tests = wq.get("wq_is_tests", {})
         return Factor(
             expression=expression,
             fitness=round(wq.get("wq_fitness", bs.get("wq_fitness", 0)), 3),
@@ -111,7 +108,7 @@ def parse_result(result: dict, expression: str, params: dict) -> Optional[Factor
         return None
 
 
-def evaluate(server: str, expression: str, params: dict) -> Optional[dict]:
+def evaluate(server: str, expression: str, params: dict) -> dict | None:
     """Submit, poll, parse — return dict of factor metrics or None."""
     result = submit_and_poll(server, expression, params)
     factor = parse_result(result, expression, params)
@@ -162,7 +159,7 @@ def batch_evaluate(
 
     results: list[dict] = []
 
-    def _poll_and_parse(expr: str, tid: str) -> Optional[dict]:
+    def _poll_and_parse(expr: str, tid: str) -> dict | None:
         raw = poll_task(server, tid, timeout)
         f = parse_result(raw, expr, params)
         return f.__dict__ if f else None

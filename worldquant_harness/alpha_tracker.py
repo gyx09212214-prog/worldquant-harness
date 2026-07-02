@@ -4,20 +4,12 @@ import asyncio
 import logging
 import threading
 import uuid as _uuid
-from difflib import SequenceMatcher
 
 from sqlalchemy import select
 
+from .wq_similarity import compute_similarity
+
 logger = logging.getLogger(__name__)
-
-
-def _safe_float(val) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
 
 
 async def record_submitted_alpha(
@@ -177,35 +169,6 @@ def update_submitted_alpha_status_sync(alpha_id: str, new_status: str):
         t = threading.Thread(target=_run, daemon=True)
         t.start()
         t.join(timeout=10)
-
-
-def compute_similarity(expr_a: str, expr_b: str) -> dict:
-    from .expression_parser import extract_components, normalize_expression
-
-    norm_a = normalize_expression(expr_a)
-    norm_b = normalize_expression(expr_b)
-
-    text_sim = SequenceMatcher(None, norm_a, norm_b).ratio()
-
-    comp_a = extract_components(expr_a)
-    comp_b = extract_components(expr_b)
-
-    ops_a = set(comp_a.get("operators", []))
-    ops_b = set(comp_b.get("operators", []))
-    fields_a = set(comp_a.get("fields", []))
-    fields_b = set(comp_b.get("fields", []))
-
-    ops_jaccard = len(ops_a & ops_b) / len(ops_a | ops_b) if (ops_a | ops_b) else 1.0
-    fields_jaccard = len(fields_a & fields_b) / len(fields_a | fields_b) if (fields_a | fields_b) else 1.0
-
-    overall = 0.5 * text_sim + 0.3 * ops_jaccard + 0.2 * fields_jaccard
-
-    return {
-        "text_similarity": round(text_sim, 4),
-        "operator_overlap": round(ops_jaccard, 4),
-        "field_overlap": round(fields_jaccard, 4),
-        "overall_similarity": round(overall, 4),
-    }
 
 
 async def check_self_correlation(

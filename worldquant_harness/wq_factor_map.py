@@ -6,7 +6,6 @@ It does not call WQ BRAIN and does not mutate the database.
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import statistics
@@ -18,10 +17,22 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .alpha_tracker import compute_similarity
+from .artifact_io import csv_value as _csv_value
+from .artifact_io import write_csv as artifact_write_csv
+from .artifact_io import write_json as artifact_write_json
+from .artifact_io import write_jsonl as artifact_write_jsonl
+from .artifact_io import write_text as artifact_write_text
 from .expression_parser import extract_components, normalize_expression
 from .models import SubmittedAlpha, WQAlphaExperiment, WQFailureMemory
+from .record_utils import first_stripped_text as _first_text
+from .record_utils import nested as _nested
+from .record_utils import safe_float as _safe_float
+from .record_utils import safe_int as _safe_int
+from .report_utils import first_present as _first_present
+from .report_utils import markdown_cell as _md
+from .report_utils import truncate_text as _truncate
 from .wq_evolutionary_generator import classify_domain, family_hash
+from .wq_similarity import compute_similarity
 
 METRIC_KEYS = ("sharpe", "fitness", "returns", "turnover", "drawdown", "margin")
 COUNT_KEYS = ("long_count", "short_count")
@@ -257,15 +268,24 @@ def write_factor_map_artifacts(
     written: dict[str, str] = {}
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        written["nodes"] = str(_write_jsonl(output_dir / "nodes.jsonl", report["nodes"]))
-        written["edges"] = str(_write_jsonl(output_dir / "edges.jsonl", report["edges"]))
+        nodes_path = output_dir / "nodes.jsonl"
+        edges_path = output_dir / "edges.jsonl"
+        artifact_write_jsonl(nodes_path, report["nodes"])
+        artifact_write_jsonl(edges_path, report["edges"])
+        written["nodes"] = str(nodes_path)
+        written["edges"] = str(edges_path)
         written["domain_summary"] = str(_write_csv(output_dir / "domain_summary.csv", report["domain_summary"]))
         written["field_summary"] = str(_write_csv(output_dir / "field_summary.csv", report["field_summary"]))
-        written["summary"] = str(_write_json(output_dir / "summary.json", _summary_payload(report, written)))
-        written["markdown"] = str(_write_text(output_dir / "factor_map.md", report["markdown"]))
+        summary_path = output_dir / "summary.json"
+        markdown_path = output_dir / "factor_map.md"
+        artifact_write_json(summary_path, _summary_payload(report, written))
+        artifact_write_text(markdown_path, report["markdown"])
+        written["summary"] = str(summary_path)
+        written["markdown"] = str(markdown_path)
     if obsidian_output:
         obsidian_output.parent.mkdir(parents=True, exist_ok=True)
-        written["obsidian"] = str(_write_text(obsidian_output, report["markdown"]))
+        artifact_write_text(obsidian_output, report["markdown"])
+        written["obsidian"] = str(obsidian_output)
     report.setdefault("files", {}).update(written)
     return written
 
@@ -834,87 +854,14 @@ def _summary_payload(report: dict[str, Any], written: dict[str, str]) -> dict[st
     }
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    return path
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-    return path
-
-
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = sorted({key for row in rows for key in row})
-    with path.open("w", encoding="utf-8-sig", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({key: _csv_value(row.get(key)) for key in fieldnames})
+    artifact_write_csv(path, rows, fieldnames, value_transform=_csv_value, empty_fieldnames=None)
     return path
-
-
-def _write_text(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
-def _csv_value(value: Any) -> Any:
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, default=str)
-    return value
 
 
 def _short_hash(text: str, length: int = 12) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:length]
-
-
-def _nested(payload: Any, *keys: str) -> Any:
-    cur = payload
-    for key in keys:
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(key)
-    return cur
-
-
-def _first_present(*values: Any) -> Any:
-    for value in values:
-        if value is not None and value != "":
-            return value
-    return None
-
-
-def _first_text(*values: Any) -> str | None:
-    value = _first_present(*values)
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_int(value: Any) -> int | None:
-    try:
-        if value is None or value == "":
-            return None
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _stringify(value: Any) -> str | None:
@@ -928,12 +875,3 @@ def _stringify(value: Any) -> str | None:
 def _is_forum_source(value: Any) -> bool:
     text = str(value or "").lower()
     return any(token in text for token in FORUM_SOURCE_TOKENS)
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
-
-
-def _truncate(value: str, limit: int) -> str:
-    text = " ".join(str(value).split())
-    return text if len(text) <= limit else text[: limit - 3] + "..."

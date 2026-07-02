@@ -25,6 +25,7 @@ from .expression_parser import (
     normalize_expression,
     parse_expression,
 )
+from .record_utils import first_float as _safe_float
 
 SCHEMA_VERSION = 1
 DEFAULT_FORBIDDEN_FIELDS = {"short_interest", "short_ratio"}
@@ -656,14 +657,3 @@ def _safe_int(value: Any, *, default: int) -> int:
         return int(value)
     except Exception:
         return int(default)
-
-
-def _safe_float(*values: Any) -> float | None:
-    for value in values:
-        if value is None or value == "":
-            continue
-        try:
-            return float(value)
-        except Exception:
-            continue
-    return None

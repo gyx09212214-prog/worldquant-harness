@@ -95,5 +95,11 @@ def test_build_community_skill_memory_groups_experience_categories(tmp_path):
     assert "community::near_pass_repair" in skill_ids
     assert "community::alpha_template_transform" in skill_ids
     assert "community::operation_attribution" in skill_ids
+    assert "community_failure::correlation_near_pass_or_highscore_repair" in skill_ids
+    assert "community_failure::template_clone_blocker" in skill_ids
+    assert "community_failure::operator_platform_unit_probe" in skill_ids
     assert "forum_recipe::sentiment_overlay" in skill_ids
+    correlation_skill = next(row for row in skills if row["skill_id"] == "community_failure::correlation_near_pass_or_highscore_repair")
+    assert correlation_skill["selection_rule"]["action_bucket"] == "correlation_near_pass_or_highscore_repair"
+    assert "field-family change" in str(next(row for row in skills if row["skill_id"] == "community::near_pass_repair")["selection_rule"])
     assert (output / "community_skill_summary.md").is_file()

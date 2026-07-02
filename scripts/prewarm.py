@@ -78,7 +78,7 @@ def prewarm_market_data(stock_codes: list, batch_size: int = 200):
 
 def prewarm_fundamentals(stock_codes: list, batch_size: int = 50):
     """Cache fundamental data for all stocks."""
-    from worldquant_harness.fundamental_data import FundamentalDataFetcher, ALL_FUNDAMENTAL_NAMES
+    from worldquant_harness.fundamental_data import ALL_FUNDAMENTAL_NAMES, FundamentalDataFetcher
     fetcher = FundamentalDataFetcher()
     total = len(stock_codes)
     # Use all fundamental vars to ensure all columns are cached
@@ -136,7 +136,7 @@ def main():
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip())
 
-    logger.info(f"=== worldquant-harness Data Pre-warm ===")
+    logger.info("=== worldquant-harness Data Pre-warm ===")
     logger.info(f"Date range: {START_DATE} ~ {END_DATE}")
 
     # Step 1: Cache universe lists

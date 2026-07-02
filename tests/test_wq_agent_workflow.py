@@ -20,6 +20,7 @@ from worldquant_harness.wq_agent_workflow import (
     select_presubmit_ready_candidate,
     select_submission_candidates,
 )
+from worldquant_harness.wq_iteration_audit import build_iteration_audit
 from worldquant_harness.wq_legal_inputs import WQLegalInputRegistry
 
 
@@ -289,6 +290,14 @@ def test_model_candidate_designer_uses_model_output_before_fallback(workdir):
     candidates = _read_jsonl(config.output_dir / "candidate_pool.jsonl")
     assert candidates[0]["expression"] == "rank(ts_corr(vwap, volume, 20))"
     assert candidates[0]["mutation_strategy"] == "community_memory_diversify"
+    audit_summary = json.loads((config.output_dir / "iteration_audit_summary.json").read_text(encoding="utf-8"))
+    audit_rows = _read_jsonl(config.output_dir / "iteration_audit.jsonl")
+    audit_markdown = (config.output_dir / "iteration_audit.md").read_text(encoding="utf-8")
+    assert summary["iteration_audit"]["enabled"] is True
+    assert audit_summary["record_count"] >= 3
+    assert any(row["stage"] == "review" for row in audit_rows)
+    assert "rank(ts_corr(vwap, volume, 20))" not in audit_markdown
+    assert "rank(ts_corr(vwap, volume, 20))" not in (config.output_dir / "iteration_audit.jsonl").read_text(encoding="utf-8")
 
 
 def test_model_failure_falls_back_to_limited_templates(workdir):
@@ -568,6 +577,7 @@ def test_no_model_postmortem_writes_deterministic_repair_candidates(workdir):
     repairs = _read_jsonl(run_dir / "repair_queue.jsonl")
     assert summary["postmortem"]["model_repairs"]["reason"] == "deterministic_policy_repair"
     assert "community::near_pass_repair" in repairs[0]["community_skill_tags"]
+    assert "community_failure::correlation_near_pass_or_highscore_repair" in repairs[0]["community_skill_tags"]
     assert "near_pass_self_corr" in repairs[0]["skill_failure_tags"]
     assert "change_field_or_operator_family_before_window_tuning" in repairs[0]["repair_strategy_hints"]
     assert repairs[0]["candidate_expressions"]
@@ -625,7 +635,12 @@ def test_workflow_memory_context_loads_community_skills(workdir):
     assert summary["memory_context"]["community_skills"] == 1
     assert memory["community_skills"][0]["skill_id"] == "community::near_pass_repair"
     opportunities = _read_jsonl(config.output_dir / "field_opportunities.jsonl")
-    assert opportunities[0]["community_skill_route"] == ["community::near_pass_repair", "community::submission_gate"]
+    assert opportunities[0]["community_skill_route"] == [
+        "community::near_pass_repair",
+        "community_failure::metric_near_pass_overlay_repair",
+        "community_failure::correlation_near_pass_or_highscore_repair",
+        "community::submission_gate",
+    ]
     assert "expression" not in opportunities[0]
     assert opportunities[0]["source_expression_hash"]
     memory_markdown = (config.output_dir / "memory_context.md").read_text(encoding="utf-8")
@@ -1305,6 +1320,9 @@ def test_presubmit_sequential_adds_virtual_active_and_never_submits(workdir):
     assert inventory["real_active_count"] == 1
     assert inventory["virtual_active_count"] == 2
     assert [row["status"] for row in inventory["virtual_active"]] == ["VIRTUAL_ACTIVE", "VIRTUAL_ACTIVE"]
+    audit_summary = json.loads((config.output_dir / "iteration_audit_summary.json").read_text(encoding="utf-8"))
+    assert audit_summary["stage_counts"]["simulation"] == loop["total_simulations"]
+    assert audit_summary["stage_counts"]["review"] == loop["total_simulations"]
 
 
 def test_presubmit_accepts_missing_platform_status_when_candidate_is_not_submitted(workdir):
@@ -1542,10 +1560,39 @@ def test_presubmit_candidate_filter_applies_submission_policy(workdir):
     )
 
     kept = _read_jsonl(candidate_file)
+    skipped = _read_jsonl(candidate_file.with_name("candidate_skipped.jsonl"))
     assert summary["kept"] == 1
     assert summary["skip_reasons"] == {"forum_direct_template_risk": 1}
     assert kept[0]["tag"] == "cashflow-overlay"
     assert kept[0]["forum_policy_action"] == "allow"
+    assert skipped[0]["candidate_skip_reason"] == "forum_direct_template_risk"
+
+
+def test_iteration_audit_builder_classifies_presubmit_failure_and_withholds_expression(workdir):
+    run_dir = workdir / "audit_builder"
+    _write_jsonl(
+        run_dir / "presubmit_rejected.jsonl",
+        [{
+            "expression": "rank(ts_rank(open, 20))",
+            "alpha_id": "alpha_high_sc",
+            "source_family": "open_reversal",
+            "mutation_strategy": "field_family_shift",
+            "presubmit_reject_reason": "self_correlation_value_above_strict_cutoff",
+            "sc_value": 0.81,
+            "sharpe": 1.9,
+            "fitness": 1.2,
+            "turnover": 0.24,
+        }],
+    )
+
+    summary = build_iteration_audit(run_dir, mode="presubmit-sequential")
+
+    rows = _read_jsonl(run_dir / "iteration_audit.jsonl")
+    assert summary["root_cause_counts"]["self_correlation"] == 1
+    assert rows[0]["root_cause_bucket"] == "self_correlation"
+    assert rows[0]["next_action"] == "change field/operator family before more window tuning"
+    assert "expression" not in rows[0]
+    assert "rank(ts_rank(open, 20))" not in (run_dir / "iteration_audit.md").read_text(encoding="utf-8")
 
 
 def test_presubmit_candidate_filter_applies_community_skill_policy(workdir):

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import copy
 import math
-from datetime import datetime, timezone
 from typing import Any
 
+from .artifact_io import utc_now as _now
+from .record_utils import safe_float as _safe_float
 from .wq_research_profile import profile_to_gate, profile_to_mine_config
 
 PROFILE_EVOLUTION_SCHEMA_VERSION = 1
@@ -235,16 +236,3 @@ def _set_mine_default(profile: dict[str, Any], key: str, delta: int) -> None:
 
 def _action(trigger: str, value: Any, change: str) -> dict[str, Any]:
     return {"trigger": trigger, "metric_value": value, "change": change}
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
