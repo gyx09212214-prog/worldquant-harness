@@ -262,9 +262,28 @@ The MCP server exposes harness and research operations for agent workflows, incl
 
 ## Setup
 
-Start the HTTP server:
+The default installation is WQ-only: WQ BRAIN simulation, check-only review,
+explicit submission, and a local SQLite event ledger. It does not install the
+A-share data stack, local backtester, frontend, HTTP/MCP server, or LLM client.
 
 ```bash
+pip install -e .
+```
+
+Optional profiles are explicit:
+
+```bash
+pip install -e ".[llm]"             # model-generated candidates
+pip install -e ".[server]"          # HTTP and MCP services
+pip install -e ".[migrations]"      # Alembic schema migrations
+pip install -e ".[local-backtest]"  # local/A-share backtesting stack
+pip install -e ".[all,dev]"         # full development environment
+```
+
+To start the optional HTTP server:
+
+```bash
+pip install -e ".[server,local-backtest,llm]"
 python -m worldquant_harness --transport http
 ```
 

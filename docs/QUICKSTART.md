@@ -7,6 +7,25 @@ Use Python 3.10 or newer (3.12 recommended). The web UI additionally requires
 Node.js 20 or newer and npm 10 or newer. Docker is an alternative when you do
 not want to install the Python and Node.js toolchains locally.
 
+The default Python installation is WQ-only. It contains the WQ BRAIN client,
+simulation/check/submit workflows, environment loading, and the local SQLite
+event ledger. It does not install the A-share data stack, local backtester,
+HTTP/MCP server, frontend, or an LLM client.
+
+```powershell
+python -m pip install -e .
+```
+
+Install optional features only when needed:
+
+```powershell
+python -m pip install -e ".[llm]"            # model-generated candidates
+python -m pip install -e ".[server]"         # HTTP and MCP services
+python -m pip install -e ".[migrations]"     # Alembic schema migrations
+python -m pip install -e ".[local-backtest]" # pandas/A-share local backtests
+python -m pip install -e ".[all,dev]"        # full development and CI environment
+```
+
 ## 1. Public Harness Demo
 
 ```powershell
@@ -61,6 +80,7 @@ contract.
 For local expression backtests and MCP access:
 
 ```powershell
+python -m pip install -e ".[server,local-backtest,llm]"
 npm --prefix frontend ci
 npm --prefix frontend run build
 python -m worldquant_harness --transport http

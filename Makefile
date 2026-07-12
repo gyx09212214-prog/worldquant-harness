@@ -1,4 +1,4 @@
-.PHONY: setup run dev test lint clean frontend
+.PHONY: setup setup-all setup-server run dev test lint clean frontend
 
 PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
 VENV := .venv
@@ -8,10 +8,16 @@ setup:
 	@echo "==> Creating virtual environment..."
 	$(PYTHON) -m venv $(VENV)
 	$(BIN)/pip install --upgrade pip
-	$(BIN)/pip install -e ".[dev]"
+	$(BIN)/pip install -e .
 	@if [ ! -f .env ]; then cp .env.example .env && echo "==> Created .env from template (edit as needed)"; fi
 	@echo ""
-	@echo "Setup complete! Run: make run"
+	@echo "WQ-only setup complete. Configure WQ_BRAIN_EMAIL and WQ_BRAIN_PASSWORD in .env."
+
+setup-all: setup
+	$(BIN)/pip install -e ".[all,dev]"
+
+setup-server: setup
+	$(BIN)/pip install -e ".[server,local-backtest,llm]"
 
 run:
 	$(BIN)/python -m worldquant_harness --transport http

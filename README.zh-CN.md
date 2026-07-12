@@ -232,9 +232,27 @@ MCP 服务向智能体工作流暴露约束框架和研究操作，包括公开�
 
 ## 安装与启动
 
-启动 HTTP 服务：
+默认安装现在是 WQ-only：只包含 WQ BRAIN 模拟、check-only、显式提交和本地
+SQLite 事件台账，不安装 A 股数据、本地回测、前端、HTTP/MCP 服务或 LLM 客户端。
 
 ```bash
+pip install -e .
+```
+
+需要其他能力时再显式安装：
+
+```bash
+pip install -e ".[llm]"             # 模型生成候选
+pip install -e ".[server]"          # HTTP 和 MCP 服务
+pip install -e ".[migrations]"      # Alembic 数据库迁移
+pip install -e ".[local-backtest]"  # 本地/A 股回测栈
+pip install -e ".[all,dev]"         # 完整开发环境
+```
+
+启动可选 HTTP 服务：
+
+```bash
+pip install -e ".[server,local-backtest,llm]"
 python -m worldquant_harness --transport http
 ```
 

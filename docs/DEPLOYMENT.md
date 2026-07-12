@@ -47,7 +47,7 @@ cd worldquant-harness
 
 python3 -m venv venv
 source venv/bin/activate
-pip install -e .
+pip install -e ".[server,local-backtest,llm]"
 
 # 构建前端
 cd frontend && npm ci && npm run build && cd ..

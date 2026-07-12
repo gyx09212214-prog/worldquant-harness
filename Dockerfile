@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml README.md LICENSE ./
 COPY worldquant_harness/ ./worldquant_harness/
-RUN pip install --no-cache-dir -e ".[postgresql]" && \
+RUN pip install --no-cache-dir -e ".[server,local-backtest,llm,postgresql]" && \
     rm -rf /root/.cache/pip
 
 COPY scripts/ ./scripts/
