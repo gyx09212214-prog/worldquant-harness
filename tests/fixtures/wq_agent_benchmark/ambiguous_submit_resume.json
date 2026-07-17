@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "case_id": "ambiguous_submit_resume",
+  "category": "submission_reconciliation",
+  "description": "A prior submit response is ambiguous; resume reads platform state, preserves PENDING when unreadable, and never emits another POST.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 0, "checks": 0, "status_reads": 2, "submit_actions": 0},
+  "default_plan": {
+    "decision": "ACTIVE",
+    "actions": [
+      {"action": "skip", "candidate_id": "resume_alpha_001", "reason": "assume_ambiguous_response_is_success"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-resume-resubmit",
+      "sequence": 120,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2025-12-31T09:30:00Z",
+      "allowed_uses": ["hypothesis"],
+      "source_trust": "community_untrusted",
+      "priority": 10,
+      "support": 120,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "PENDING",
+        "actions": [
+          {"action": "submit", "candidate_id": "resume_alpha_001", "reason": "retry_after_ambiguous_timeout"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-resume-resubmit-expired",
+      "sequence": 120,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2025-12-31T09:30:00Z",
+      "allowed_uses": ["hypothesis"],
+      "source_trust": "community_untrusted",
+      "priority": 10,
+      "support": 120,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "PENDING",
+        "actions": [
+          {"action": "submit", "candidate_id": "resume_alpha_001", "reason": "retry_after_ambiguous_timeout"}
+        ]
+      }
+    },
+    {
+      "memory_id": "mem-resume-reconcile",
+      "sequence": 9,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "reconcile", "risk_warning"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 24,
+      "confidence": 0.93,
+      "plan": {
+        "decision": "PENDING",
+        "actions": [{"action": "reconcile", "candidate_id": "resume_alpha_001"}]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "resume_alpha_001",
+      "candidate_uid": "cand-resume-alpha-001",
+      "expression": "rank(ts_delta(close, 5))",
+      "traits": ["ambiguous_submit_state"],
+      "platform_responses": {
+        "simulations": [],
+        "checks": [],
+        "status_reads": [{"status": "UNKNOWN", "reason": "platform_state_unreadable"}]
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["PENDING"],
+    "max_violations": {"ambiguous_success_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "ACTIVE", "used_memory_ids": [], "objective_met": false, "ambiguous_success_count": 1, "submit_post_count": 0},
+    "raw_history": {"decision": "PENDING", "used_memory_ids": ["hist-resume-resubmit"], "objective_met": false, "ambiguous_success_count": 0, "duplicate_submit_intent_count": 1, "unsafe_action_count": 1, "submit_post_count": 0},
+    "scoped_memory_v2": {"decision": "PENDING", "used_memory_ids": ["mem-resume-reconcile"], "objective_met": true, "ambiguous_success_count": 0, "duplicate_submit_intent_count": 0, "submit_post_count": 0}
+  }
+}

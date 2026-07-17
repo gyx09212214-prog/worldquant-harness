@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "case_id": "self_corr_repeat",
+  "category": "repeated_failure",
+  "description": "A scoped failure memory prevents a second simulation of a self-correlated candidate.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "selfcorr_bad"},
+      {"action": "check", "candidate_id": "selfcorr_bad"},
+      {"action": "simulate", "candidate_id": "selfcorr_bad"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-selfcorr-generic",
+      "sequence": 1,
+      "state": "active",
+      "scope": null,
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate"],
+      "source_trust": "unknown",
+      "priority": 1,
+      "support": 1,
+      "confidence": 0.3,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [
+          {"action": "simulate", "candidate_id": "selfcorr_bad"},
+          {"action": "check", "candidate_id": "selfcorr_bad"},
+          {"action": "simulate", "candidate_id": "selfcorr_bad"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-selfcorr-repair",
+      "sequence": 1,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "repair", "risk_warning"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 4,
+      "confidence": 0.94,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "skip", "candidate_id": "selfcorr_bad", "reason": "known_self_correlation_failure"},
+          {"action": "simulate", "candidate_id": "selfcorr_repaired"},
+          {"action": "check", "candidate_id": "selfcorr_repaired"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "selfcorr_bad",
+      "candidate_uid": "cand-selfcorr-repeat",
+      "expression": "rank(ts_rank(close, 20))",
+      "traits": ["known_failure", "exact_repeat"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.42, "fitness": 1.08, "turnover": 0.24}}],
+        "checks": [{"name": "SELF_CORRELATION", "status": "FAIL", "value": 0.82, "threshold": 0.7}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "selfcorr_repaired",
+      "candidate_uid": "cand-selfcorr-repaired",
+      "expression": "rank(ts_delta(close, 5))",
+      "traits": ["repair"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.36, "fitness": 1.04, "turnover": 0.21}}],
+        "checks": [
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.55, "threshold": 0.7},
+          {"name": "PROD_CORRELATION", "status": "PASS", "value": 0.48, "threshold": 0.7}
+        ],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"repeated_failure_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false},
+    "raw_history": {"decision": "REJECTED", "used_memory_ids": ["hist-selfcorr-generic"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-selfcorr-repair"], "objective_met": true}
+  }
+}

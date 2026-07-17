@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "case_id": "concentration_repair",
+  "category": "targeted_repair",
+  "description": "A verified scoped memory applies a bounded outer-rank repair after concentration failure.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "concentration_base"},
+      {"action": "check", "candidate_id": "concentration_base"},
+      {"action": "simulate", "candidate_id": "concentration_base"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-concentration-neutralize",
+      "sequence": 7,
+      "state": "active",
+      "scope": null,
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate"],
+      "source_trust": "unknown",
+      "priority": 2,
+      "support": 1,
+      "confidence": 0.45,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [
+          {"action": "simulate", "candidate_id": "concentration_base"},
+          {"action": "simulate", "candidate_id": "concentration_neutralized"},
+          {"action": "check", "candidate_id": "concentration_neutralized"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-concentration-rank",
+      "sequence": 2,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "repair"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 5,
+      "confidence": 0.96,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "concentration_base"},
+          {"action": "simulate", "candidate_id": "concentration_ranked"},
+          {"action": "check", "candidate_id": "concentration_ranked"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "concentration_base",
+      "candidate_uid": "cand-concentration-base",
+      "expression": "ts_mean(volume, 20)",
+      "traits": ["known_failure", "concentrated"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.38, "fitness": 1.05, "turnover": 0.16, "max_weight": 0.19}}],
+        "checks": [{"name": "CONCENTRATED_WEIGHT", "status": "FAIL", "value": 0.19, "threshold": 0.1}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "concentration_neutralized",
+      "candidate_uid": "cand-concentration-neutralized",
+      "expression": "group_neutralize(ts_mean(volume, 20), sector)",
+      "traits": ["repair", "concentrated"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.29, "fitness": 0.99, "turnover": 0.17, "max_weight": 0.13}}],
+        "checks": [{"name": "CONCENTRATED_WEIGHT", "status": "FAIL", "value": 0.13, "threshold": 0.1}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "concentration_ranked",
+      "candidate_uid": "cand-concentration-ranked",
+      "expression": "rank(ts_mean(volume, 20))",
+      "traits": ["repair", "would_succeed"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.35, "fitness": 1.02, "turnover": 0.18, "max_weight": 0.07}}],
+        "checks": [
+          {"name": "CONCENTRATED_WEIGHT", "status": "PASS", "value": 0.07, "threshold": 0.1},
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.46, "threshold": 0.7}
+        ],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"repeated_failure_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false},
+    "raw_history": {"decision": "REJECTED", "used_memory_ids": ["hist-concentration-neutralize"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-concentration-rank"], "objective_met": true}
+  }
+}

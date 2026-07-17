@@ -212,11 +212,13 @@ python scripts/run_public_harness_eval.py --output-root reports/public_harness_e
 
 可执行契约由 `HarnessRun`、`HarnessStep`、`HarnessEvent`、`ArtifactRef`、`DecisionGate`、`MemoryDelta`、`ProfilePatch` 表达。见 [研究契约](docs/AGENT_HARNESS_CONTRACT.md) 和 [智能体角色](docs/AGENT_ROLES.md)。
 
+[确定性 WQ Agent Benchmark](docs/WQ_AGENT_BENCHMARK.md) 使用固定 seed、等配额预算和 canonical trace hash，在九个合成场景上比较 `no_memory`、`raw_history` 与 `scoped_memory_v2`，并在运行时强制保持零提交 POST。
+
 ## 核心能力
 
 | 模块 | 能力 |
 |:--|:--|
-| 编排 | 公开无提交评估、沙盒实验、预提交门控、生命周期轨迹 |
+| 编排 | 公开无提交评估、三变体确定性 Benchmark、沙盒实验、预提交门控、生命周期轨迹 |
 | 记忆 | 历史导入、阻塞签名、字段族统计、画像演化 |
 | 智能体接入 | MCP 工具、CLI 脚本、REST API、监控 UI |
 | 复盘 | 质量复盘面板、提交效率报告、就绪/拒绝队列 |

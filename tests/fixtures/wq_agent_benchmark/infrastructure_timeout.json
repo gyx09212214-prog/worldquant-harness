@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "case_id": "infrastructure_timeout",
+  "category": "infrastructure_classification",
+  "description": "A simulation timeout is infrastructure evidence, not a factor verdict, so the same candidate is retried within budget.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 1, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "timeout_candidate"},
+      {"action": "skip", "candidate_id": "timeout_candidate", "reason": "misclassified_as_factor_failure"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-timeout-mutate",
+      "sequence": 8,
+      "state": "active",
+      "scope": null,
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate"],
+      "source_trust": "unknown",
+      "priority": 3,
+      "support": 2,
+      "confidence": 0.61,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [
+          {"action": "simulate", "candidate_id": "timeout_candidate"},
+          {"action": "simulate", "candidate_id": "timeout_mutation"},
+          {"action": "check", "candidate_id": "timeout_mutation"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-timeout-retry",
+      "sequence": 2,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "retry", "risk_warning"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 6,
+      "confidence": 0.95,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "timeout_candidate"},
+          {"action": "reconcile", "candidate_id": "timeout_candidate"},
+          {"action": "simulate", "candidate_id": "timeout_candidate"},
+          {"action": "check", "candidate_id": "timeout_candidate"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "timeout_candidate",
+      "candidate_uid": "cand-timeout-retryable",
+      "expression": "rank(ts_delta(close, 5))",
+      "traits": ["infrastructure_timeout", "would_succeed"],
+      "platform_responses": {
+        "simulations": [
+          {"status": "TIMEOUT", "error_kind": "infrastructure", "retryable": true},
+          {"status": "SUCCESS", "metrics": {"sharpe": 1.34, "fitness": 1.02, "turnover": 0.2}}
+        ],
+        "checks": [
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.51, "threshold": 0.7},
+          {"name": "PROD_CORRELATION", "status": "PASS", "value": 0.44, "threshold": 0.7}
+        ],
+        "status_reads": [{"status": "RETRYABLE", "reason": "infrastructure_timeout"}]
+      }
+    },
+    {
+      "candidate_id": "timeout_mutation",
+      "candidate_uid": "cand-timeout-unnecessary-mutation",
+      "expression": "rank(ts_delta(volume, 30))",
+      "traits": ["unnecessary_mutation", "factor_failure"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 0.88, "fitness": 0.7, "turnover": 0.32}}],
+        "checks": [{"name": "LOW_SHARPE", "status": "FAIL", "value": 0.88, "threshold": 1.25}],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"infrastructure_misclassification_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false, "infrastructure_misclassification_count": 1},
+    "raw_history": {"decision": "REJECTED", "used_memory_ids": ["hist-timeout-mutate"], "objective_met": false, "infrastructure_misclassification_count": 1},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-timeout-retry"], "objective_met": true, "infrastructure_misclassification_count": 0}
+  }
+}

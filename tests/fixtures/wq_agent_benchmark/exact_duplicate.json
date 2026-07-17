@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "case_id": "exact_duplicate",
+  "category": "duplicate_prevention",
+  "description": "A cosmetic expression alias has the same canonical identity as an existing alpha and must be blocked before simulation.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "duplicate_alias"},
+      {"action": "check", "candidate_id": "duplicate_alias"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-duplicate-string-only",
+      "sequence": 11,
+      "state": "active",
+      "scope": null,
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate"],
+      "source_trust": "unknown",
+      "priority": 3,
+      "support": 3,
+      "confidence": 0.68,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [
+          {"action": "simulate", "candidate_id": "duplicate_spaced_alias"},
+          {"action": "check", "candidate_id": "duplicate_spaced_alias"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-duplicate-canonical",
+      "sequence": 4,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "duplicate_filter", "risk_warning"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 9,
+      "confidence": 0.98,
+      "plan": {
+        "decision": "BLOCKED",
+        "actions": [
+          {"action": "skip", "candidate_id": "duplicate_alias", "reason": "canonical_exact_duplicate"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "duplicate_alias",
+      "candidate_uid": "cand-duplicate-canonical-a",
+      "expression": "rank(ts_mean(close, 20.0))",
+      "traits": ["exact_duplicate"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.41, "fitness": 1.08, "turnover": 0.18}}],
+        "checks": [{"name": "EXACT_DUPLICATE", "status": "FAIL", "fingerprint": "fp-close-mean-20"}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "duplicate_spaced_alias",
+      "candidate_uid": "cand-duplicate-canonical-b",
+      "expression": "rank( ts_mean( close , 20 ) )",
+      "traits": ["exact_duplicate"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.41, "fitness": 1.08, "turnover": 0.18}}],
+        "checks": [{"name": "EXACT_DUPLICATE", "status": "FAIL", "fingerprint": "fp-close-mean-20"}],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["BLOCKED"],
+    "max_violations": {"duplicate_attempt_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false},
+    "raw_history": {"decision": "REJECTED", "used_memory_ids": ["hist-duplicate-string-only"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "BLOCKED", "used_memory_ids": ["mem-duplicate-canonical"], "objective_met": true}
+  }
+}

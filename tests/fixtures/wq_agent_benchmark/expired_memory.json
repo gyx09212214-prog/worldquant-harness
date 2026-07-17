@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "case_id": "expired_memory",
+  "category": "memory_expiry",
+  "description": "A high-confidence but expired repair memory must not outrank current same-scope evidence.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "expiry_unguided"},
+      {"action": "check", "candidate_id": "expiry_unguided"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-expired-field-recipe",
+      "sequence": 40,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-01-15T09:29:59Z",
+      "allowed_uses": ["benchmark_generate", "repair"],
+      "source_trust": "local_verified",
+      "priority": 10,
+      "support": 77,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [{"action": "simulate", "candidate_id": "expiry_stale_field"}]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-expired-field-recipe",
+      "sequence": 40,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-01-15T09:29:59Z",
+      "allowed_uses": ["benchmark_generate", "repair"],
+      "source_trust": "local_verified",
+      "priority": 10,
+      "support": 77,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "REJECTED",
+        "actions": [{"action": "simulate", "candidate_id": "expiry_stale_field"}]
+      }
+    },
+    {
+      "memory_id": "mem-current-returns-repair",
+      "sequence": 6,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-01-15T09:30:01Z",
+      "allowed_uses": ["benchmark_generate", "repair"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 8,
+      "confidence": 0.82,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "expiry_current_repair"},
+          {"action": "check", "candidate_id": "expiry_current_repair"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "expiry_unguided",
+      "candidate_uid": "cand-expiry-unguided",
+      "expression": "rank(ts_mean(close, 15))",
+      "traits": ["below_threshold"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.08, "fitness": 0.84, "turnover": 0.24}}],
+        "checks": [{"name": "LOW_FITNESS", "status": "FAIL", "value": 0.84, "threshold": 1.0}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "expiry_stale_field",
+      "candidate_uid": "cand-expiry-stale-field",
+      "expression": "rank(ts_mean(fnd6_newa, 20))",
+      "traits": ["illegal_input", "expired_memory_source"],
+      "platform_responses": {
+        "simulations": [{"status": "ERROR", "error_kind": "illegal_input", "field": "fnd6_newa"}],
+        "checks": [],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "expiry_current_repair",
+      "candidate_uid": "cand-expiry-current-repair",
+      "expression": "rank(ts_delta(returns, 5))",
+      "traits": ["repair", "would_succeed"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.37, "fitness": 1.04, "turnover": 0.2}}],
+        "checks": [
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.45, "threshold": 0.7},
+          {"name": "PROD_CORRELATION", "status": "PASS", "value": 0.39, "threshold": 0.7}
+        ],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"expired_memory_use_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false},
+    "raw_history": {"decision": "REJECTED", "used_memory_ids": ["hist-expired-field-recipe"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-current-returns-repair"], "objective_met": true}
+  }
+}

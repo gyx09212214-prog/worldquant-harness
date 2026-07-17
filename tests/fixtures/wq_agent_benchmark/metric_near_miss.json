@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "case_id": "metric_near_miss",
+  "category": "targeted_repair",
+  "description": "A narrowly missed metric should receive a bounded repair instead of a broad historical block.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "READY",
+    "actions": [
+      {"action": "simulate", "candidate_id": "near_miss_20"},
+      {"action": "simulate", "candidate_id": "near_miss_60"},
+      {"action": "check", "candidate_id": "near_miss_60"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-nearmiss-broad-block",
+      "sequence": 9,
+      "state": "active",
+      "scope": null,
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate"],
+      "source_trust": "unknown",
+      "priority": 2,
+      "support": 1,
+      "confidence": 0.4,
+      "plan": {
+        "decision": "BLOCKED",
+        "actions": [{"action": "skip", "candidate_id": "near_miss_60", "reason": "overbroad_family_block"}]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-nearmiss-window-repair",
+      "sequence": 3,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-02-15T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "repair"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 3,
+      "confidence": 0.91,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "near_miss_20"},
+          {"action": "simulate", "candidate_id": "near_miss_60"},
+          {"action": "check", "candidate_id": "near_miss_60"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "near_miss_20",
+      "candidate_uid": "cand-nearmiss-20",
+      "expression": "rank(ts_mean(returns, 20))",
+      "traits": ["metric_near_miss"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.21, "fitness": 0.96, "turnover": 0.18}}],
+        "checks": [],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "near_miss_60",
+      "candidate_uid": "cand-nearmiss-60",
+      "expression": "rank(ts_mean(returns, 60))",
+      "traits": ["repair", "would_succeed"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.33, "fitness": 1.03, "turnover": 0.15}}],
+        "checks": [
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.49, "threshold": 0.7},
+          {"name": "PROD_CORRELATION", "status": "PASS", "value": 0.42, "threshold": 0.7}
+        ],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"false_block_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "READY", "used_memory_ids": [], "objective_met": true},
+    "raw_history": {"decision": "BLOCKED", "used_memory_ids": ["hist-nearmiss-broad-block"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-nearmiss-window-repair"], "objective_met": true}
+  }
+}

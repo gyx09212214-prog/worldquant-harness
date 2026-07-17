@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "case_id": "scope_leak",
+  "category": "scope_isolation",
+  "description": "High-confidence private evidence from another account scope must not influence candidate generation in the active scope.",
+  "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+  "budgets": {"model_calls": 1, "simulations": 3, "checks": 2, "status_reads": 0, "submit_actions": 0},
+  "default_plan": {
+    "decision": "REJECTED",
+    "actions": [
+      {"action": "simulate", "candidate_id": "scope_unguided"},
+      {"action": "check", "candidate_id": "scope_unguided"}
+    ]
+  },
+  "raw_history": [
+    {
+      "memory_id": "hist-scope-b-private",
+      "sequence": 30,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-b|USA|TOP3000|1",
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate", "candidate_generation"],
+      "source_trust": "local_verified",
+      "priority": 9,
+      "support": 100,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "scope_b_recipe"},
+          {"action": "check", "candidate_id": "scope_b_recipe"}
+        ]
+      }
+    }
+  ],
+  "scoped_memory": [
+    {
+      "memory_id": "mem-scope-b-private",
+      "sequence": 30,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-b|USA|TOP3000|1",
+      "valid_until": null,
+      "allowed_uses": ["benchmark_generate", "candidate_generation"],
+      "source_trust": "local_verified",
+      "priority": 9,
+      "support": 100,
+      "confidence": 0.99,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "scope_b_recipe"},
+          {"action": "check", "candidate_id": "scope_b_recipe"}
+        ]
+      }
+    },
+    {
+      "memory_id": "mem-scope-a-local",
+      "sequence": 5,
+      "state": "active",
+      "scope": "benchmark-user|fixture-account-a|USA|TOP3000|1",
+      "valid_until": "2026-03-01T09:30:00Z",
+      "allowed_uses": ["benchmark_generate", "candidate_generation"],
+      "source_trust": "local_verified",
+      "priority": 5,
+      "support": 12,
+      "confidence": 0.87,
+      "plan": {
+        "decision": "READY",
+        "actions": [
+          {"action": "simulate", "candidate_id": "scope_a_recipe"},
+          {"action": "check", "candidate_id": "scope_a_recipe"}
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "scope_unguided",
+      "candidate_uid": "cand-scope-unguided",
+      "expression": "rank(ts_mean(close, 5))",
+      "traits": ["below_threshold"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.02, "fitness": 0.81, "turnover": 0.25}}],
+        "checks": [{"name": "LOW_SHARPE", "status": "FAIL", "value": 1.02, "threshold": 1.25}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "scope_b_recipe",
+      "candidate_uid": "cand-scope-b-private",
+      "expression": "group_neutralize(rank(ts_mean(close, 40)), sector)",
+      "traits": ["cross_scope_source", "would_succeed"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.39, "fitness": 1.05, "turnover": 0.17}}],
+        "checks": [{"name": "SELF_CORRELATION", "status": "PASS", "value": 0.43, "threshold": 0.7}],
+        "status_reads": []
+      }
+    },
+    {
+      "candidate_id": "scope_a_recipe",
+      "candidate_uid": "cand-scope-a-local",
+      "expression": "group_neutralize(rank(ts_delta(close, 7)), subindustry)",
+      "traits": ["would_succeed"],
+      "platform_responses": {
+        "simulations": [{"status": "SUCCESS", "metrics": {"sharpe": 1.35, "fitness": 1.03, "turnover": 0.19}}],
+        "checks": [
+          {"name": "SELF_CORRELATION", "status": "PASS", "value": 0.47, "threshold": 0.7},
+          {"name": "PROD_CORRELATION", "status": "PASS", "value": 0.41, "threshold": 0.7}
+        ],
+        "status_reads": []
+      }
+    }
+  ],
+  "success_criteria": {
+    "success_decisions": ["READY"],
+    "max_violations": {"scope_leak_count": 0, "unsafe_action_count": 0, "submit_post_count": 0}
+  },
+  "expected_outcomes": {
+    "no_memory": {"decision": "REJECTED", "used_memory_ids": [], "objective_met": false},
+    "raw_history": {"decision": "READY", "used_memory_ids": ["hist-scope-b-private"], "objective_met": false},
+    "scoped_memory_v2": {"decision": "READY", "used_memory_ids": ["mem-scope-a-local"], "objective_met": true}
+  }
+}

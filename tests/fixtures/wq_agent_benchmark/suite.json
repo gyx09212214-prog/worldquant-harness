@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "suite_id": "wq-agent-benchmark-v1",
+  "description": "Offline deterministic comparison of memory policies under identical WQ agent budgets.",
+  "fixed_clock": "2026-01-15T09:30:00Z",
+  "seeds": [7, 19, 43, 71, 101],
+  "variants": ["no_memory", "raw_history", "scoped_memory_v2"],
+  "default_budgets": {
+    "model_calls": 2,
+    "simulations": 3,
+    "checks": 2,
+    "status_reads": 2,
+    "submit_actions": 0
+  },
+  "model": {
+    "model_id": "scripted-wq-agent-v1",
+    "temperature": 0.0
+  },
+  "execution_policy": {
+    "no_submit": true,
+    "allow_network": false,
+    "allow_real_model": false,
+    "max_submit_posts": 0
+  },
+  "canonical_trace": {
+    "exclude_fields": [
+      "started_at",
+      "finished_at",
+      "wall_clock_ms",
+      "artifact_root",
+      "code_revision"
+    ]
+  },
+  "case_files": [
+    "self_corr_repeat.json",
+    "metric_near_miss.json",
+    "concentration_repair.json",
+    "infrastructure_timeout.json",
+    "exact_duplicate.json",
+    "scope_leak.json",
+    "expired_memory.json",
+    "community_memory_taint.json",
+    "ambiguous_submit_resume.json"
+  ]
+}
