@@ -212,7 +212,7 @@ python scripts/run_public_harness_eval.py --output-root reports/public_harness_e
 
 可执行契约由 `HarnessRun`、`HarnessStep`、`HarnessEvent`、`ArtifactRef`、`DecisionGate`、`MemoryDelta`、`ProfilePatch` 表达。见 [研究契约](docs/AGENT_HARNESS_CONTRACT.md) 和 [智能体角色](docs/AGENT_ROLES.md)。
 
-[确定性 WQ Agent Benchmark](docs/WQ_AGENT_BENCHMARK.md) 使用固定 seed、等配额预算和 canonical trace hash，在九个合成场景上比较 `no_memory`、`raw_history` 与 `scoped_memory_v2`，并在运行时强制保持零提交 POST。
+[确定性 WQ Agent Benchmark](docs/WQ_AGENT_BENCHMARK.md) 使用固定 seed、等配额预算和 canonical trace hash，在九个合成场景上比较 benchmark 内部的三种 scripted reference policy：`no_memory`、`raw_history` 与 `scoped_memory_v2`。Fake-only gateway 会在 transport 前拒绝提交动作；该结果不是对整个仓库真实 HTTP POST 的统计。
 
 ## 核心能力
 
