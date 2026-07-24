@@ -6,9 +6,10 @@ WQ_BRAIN_EMAIL and WQ_BRAIN_PASSWORD.
 """
 
 import logging
+import math
 import os
 import time
-from typing import Callable
+from typing import Any, Callable, cast
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -174,6 +175,7 @@ class WQBrainClient:
         """GET a WQ API path and return a JSON object with HTTP metadata on failure."""
         url = path if path.startswith("http") else f"{API_BASE}/{path.lstrip('/')}"
         r = self._get_session().get(url, params=params, timeout=_REQUEST_TIMEOUT)
+        data: object
         try:
             data = r.json()
         except Exception:
@@ -181,8 +183,9 @@ class WQBrainClient:
         if r.status_code != 200:
             return {"ok": False, "status_code": r.status_code, "error": data}
         if isinstance(data, dict):
-            data.setdefault("ok", True)
-            return data
+            object_data = cast(dict[str, Any], data)
+            object_data.setdefault("ok", True)
+            return object_data
         return {"ok": True, "data": data}
 
     def get_alpha_raw(self, alpha_id: str) -> dict:
@@ -453,7 +456,7 @@ class WQBrainClient:
             "review_checks": parse_review_checks(data),
         }
 
-    def check_alpha_submission(self, alpha_id: str, max_polls: int = 6, interval: int = 10) -> dict:
+    def check_alpha_submission(self, alpha_id: str, max_polls: int = 6, interval: float = 10) -> dict:
         """Run the platform's check-only submission review for an alpha.
 
         This mirrors the web UI's "Check Submission" action. It deliberately
@@ -475,10 +478,25 @@ class WQBrainClient:
 
             last_status_code = r.status_code
             if r.status_code == 429:
-                wait = int(r.headers.get("Retry-After", str(interval)))
-                logger.warning(f"Check submission {alpha_id}: rate limited, waiting {wait}s")
-                time.sleep(wait)
-                continue
+                retry_after = r.headers.get("Retry-After")
+                try:
+                    wait = float(retry_after) if retry_after is not None else float(interval)
+                except (TypeError, ValueError):
+                    wait = float(interval)
+                if not math.isfinite(wait) or wait < 0:
+                    wait = max(0.0, float(interval))
+                if attempt + 1 < max_polls:
+                    logger.warning(f"Check submission {alpha_id}: rate limited, waiting {wait}s")
+                    time.sleep(wait)
+                    continue
+                return {
+                    "ok": False,
+                    "alpha_id": alpha_id,
+                    "status_code": 429,
+                    "failure_kind": "rate_limited",
+                    "error": "check submission rate limited",
+                    "retry_after_seconds": wait,
+                }
             if r.status_code == 404:
                 return {"ok": False, "alpha_id": alpha_id, "status_code": 404, "error": "alpha not found"}
             if r.status_code not in (200, 201, 202):
@@ -552,24 +570,73 @@ class WQBrainClient:
             out["detail"] = correlation_result_label(review_checks)
         return out
 
-    def submit_alpha(self, alpha_id: str) -> dict:
+    def submit_alpha(self, alpha_id: str, *, max_post_attempts: int | None = None) -> dict:
+        """Submit an alpha and reconcile it with GET polling.
+
+        ``max_post_attempts`` is a transport-level ceiling across the initial
+        request, connection retries, HTTP retries, and poll-triggered resubmits.
+        When it is set, polling remains GET-only so a higher-level coordinator
+        owns any subsequent logical submit attempt.
+        """
+
+        if max_post_attempts is not None:
+            if (
+                isinstance(max_post_attempts, bool)
+                or not isinstance(max_post_attempts, int)
+                or max_post_attempts < 1
+            ):
+                raise ValueError("max_post_attempts must be a positive integer")
         s = self._get_session()
         last_unexpected = None
         last_rate_limit = None
+        post_attempts = 0
+
+        def with_transport_receipt(result: dict) -> dict:
+            if max_post_attempts is not None:
+                result["submit_post_attempts"] = post_attempts
+                result["submit_post_limit"] = max_post_attempts
+            return result
+
+        def post_budget_available() -> bool:
+            return max_post_attempts is None or post_attempts < max_post_attempts
 
         for submit_try in range(3):
             r = None
             for attempt in range(3):
+                if not post_budget_available():
+                    break
                 try:
+                    post_attempts += 1
                     r = s.post(f"{API_BASE}/alphas/{alpha_id}/submit", timeout=_REQUEST_TIMEOUT)
                     body = r.text[:500]
                     logger.info(f"Submit {alpha_id}: HTTP {r.status_code}, body={body}")
                     break
                 except (requests.ConnectionError, requests.Timeout) as e:
                     logger.warning(f"Submit {alpha_id}: connection error (attempt {attempt+1}): {e}")
-                    time.sleep(5 * (attempt + 1))
-            else:
-                return {"status_code": 0, "ok": False, "detail": "connection failed after retries"}
+                    if post_budget_available():
+                        time.sleep(5 * (attempt + 1))
+            if r is None:
+                ambiguous = {
+                    "status_code": 0,
+                    "ok": False,
+                    "detail": "connection failed or transport POST budget exhausted",
+                    "failure_kind": "request_error",
+                }
+                if max_post_attempts is not None and post_attempts:
+                    actual_status = (
+                        (self._fetch_alpha(alpha_id).get("status") or "").upper()
+                    )
+                    ambiguous["reconciled_platform_status"] = actual_status or None
+                    if actual_status == "ACTIVE":
+                        ambiguous.update(
+                            {
+                                "ok": True,
+                                "platform_status": "ACTIVE",
+                                "detail": "ambiguous POST reconciled by GET as ACTIVE",
+                                "failure_kind": None,
+                            }
+                        )
+                return with_transport_receipt(ambiguous)
 
             if r.status_code == 403:
                 try:
@@ -595,42 +662,62 @@ class WQBrainClient:
                         elif failure_kind == "prod_correlation":
                             out["prod_value"] = check.get("value")
                             out["prod_limit"] = check.get("limit")
-                        return out
+                        return with_transport_receipt(out)
                 except Exception:
                     pass
-                return {"status_code": 403, "ok": False, "detail": body}
+                return with_transport_receipt(
+                    {"status_code": 403, "ok": False, "detail": body}
+                )
 
             if r.status_code == 429:
                 wait = 30 * (submit_try + 1)
                 last_rate_limit = {"status_code": 429, "body": body, "wait_seconds": wait}
+                if not post_budget_available():
+                    break
                 logger.warning(f"Submit {alpha_id}: rate limited (429), waiting {wait}s before retry")
                 time.sleep(wait)
                 continue
 
             if r.status_code not in (200, 201, 202):
                 last_unexpected = {"status_code": r.status_code, "body": body}
+                if not post_budget_available():
+                    break
                 logger.warning(f"Submit {alpha_id}: unexpected HTTP {r.status_code}, body={body}, waiting 15s before retry")
                 time.sleep(15)
                 continue
 
-            poll_result = self._poll_alpha_submission(alpha_id)
+            poll_result = self._poll_alpha_submission(
+                alpha_id,
+                allow_resubmit=max_post_attempts is None,
+            )
 
             if poll_result.get("ok"):
-                return poll_result
+                return with_transport_receipt(poll_result)
 
             if poll_result.get("platform_status") == "TIMEOUT":
                 alpha_data = self._fetch_alpha(alpha_id)
                 actual_status = (alpha_data.get("status") or "").upper()
                 if actual_status == "UNSUBMITTED":
+                    if not post_budget_available():
+                        poll_result["reconciled_platform_status"] = actual_status
+                        return with_transport_receipt(poll_result)
                     logger.warning(f"Submit {alpha_id}: platform still UNSUBMITTED after poll, retrying submit (try {submit_try+1})")
                     time.sleep(10)
                     continue
+                if actual_status == "ACTIVE":
+                    poll_result.update(
+                        {
+                            "ok": True,
+                            "platform_status": "ACTIVE",
+                            "detail": "poll timeout but GET reconciliation confirmed ACTIVE",
+                        }
+                    )
+                    return with_transport_receipt(poll_result)
                 logger.info(f"Submit {alpha_id}: poll timeout but platform status={actual_status}, treating as submitted")
-                poll_result["ok"] = True
-                poll_result["detail"] = f"poll timeout but platform accepted (status={actual_status})"
-                return poll_result
+                poll_result["reconciled_platform_status"] = actual_status or None
+                return with_transport_receipt(poll_result)
 
-            return poll_result
+            return with_transport_receipt(poll_result)
 
         out = {"status_code": 200, "ok": False, "detail": "submit failed after 3 outer retries, alpha still UNSUBMITTED"}
         if last_rate_limit:
@@ -642,9 +729,16 @@ class WQBrainClient:
             })
         if last_unexpected:
             out["last_unexpected_response"] = last_unexpected
-        return out
+        return with_transport_receipt(out)
 
-    def _poll_alpha_submission(self, alpha_id: str, max_polls: int = 12, interval: int = 10) -> dict:
+    def _poll_alpha_submission(
+        self,
+        alpha_id: str,
+        max_polls: int = 12,
+        interval: int = 10,
+        *,
+        allow_resubmit: bool = True,
+    ) -> dict:
         """Poll alpha status until platform confirms submission or correlation checks settle."""
         s = self._get_session()
         status = "UNKNOWN"
@@ -698,7 +792,11 @@ class WQBrainClient:
                     out["prod_value"] = check.get("value")
                     out["prod_limit"] = check.get("limit")
                 return out
-            elif review_checks_passed(review_checks) and status == "UNSUBMITTED":
+            elif (
+                allow_resubmit
+                and review_checks_passed(review_checks)
+                and status == "UNSUBMITTED"
+            ):
                 logger.info(f"Submit {alpha_id}: correlation checks passed but still UNSUBMITTED, retrying submit...")
                 try:
                     s.post(f"{API_BASE}/alphas/{alpha_id}/submit", timeout=_REQUEST_TIMEOUT)

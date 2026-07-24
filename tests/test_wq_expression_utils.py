@@ -26,6 +26,21 @@ def test_expression_helpers_handle_empty_input():
     assert field_signature("") == ""
 
 
+def test_expression_components_ignore_named_arguments_and_string_literals():
+    expression = 'rank(group_rank(close, bucket(rank(cap), range="0.1,1,0.1")))'
+
+    assert expression_components(expression) == {
+        "fields": {"cap", "close"},
+        "operators": {"bucket", "group_rank", "rank"},
+    }
+
+
+def test_expression_components_keep_fields_used_in_comparisons():
+    expression = "trade_when(rank(volume / adv20) >= 0.5, rank(close), -1)"
+
+    assert expression_fields(expression) == ["adv20", "close", "volume"]
+
+
 def test_jaccard_normalizes_values():
     assert jaccard(["close", "volume"], ["volume", "vwap"]) == 0.3333
     assert jaccard([], []) == 0.0

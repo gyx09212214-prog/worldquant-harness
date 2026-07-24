@@ -139,6 +139,18 @@ def test_run_scope_rejects_invalid_tenant_uuid() -> None:
             },
             (True, "ready"),
         ),
+        (
+            {"api_check_status": "api_check_readable", "sc_result": "PASS", "sc_value": None},
+            (False, "correlation_missing"),
+        ),
+        (
+            {"api_check_status": "api_check_readable", "sc_result": "PASS", "sc_value": "nan"},
+            (False, "correlation_missing"),
+        ),
+        (
+            {"api_check_status": "api_check_readable", "sc_result": "ERROR", "sc_value": 0.5},
+            (False, "correlation_pending"),
+        ),
         ({"api_check_status": "api_check_readable", "sc_result": "MISSING"}, (False, "correlation_missing")),
         (
             {"api_check_status": "api_check_readable", "sc_result": "PASS", "sc_value": 0.7001},
@@ -150,6 +162,15 @@ def test_run_scope_rejects_invalid_tenant_uuid() -> None:
                 "sc_result": "PASS",
                 "sc_value": 0.5,
                 "prod_corr_result": "PENDING",
+            },
+            (False, "correlation_pending"),
+        ),
+        (
+            {
+                "api_check_status": "api_check_readable",
+                "sc_result": "PASS",
+                "sc_value": 0.5,
+                "prod_corr_result": "ERROR",
             },
             (False, "correlation_pending"),
         ),

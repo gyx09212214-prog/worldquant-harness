@@ -81,6 +81,21 @@ VECTOR_OPERATORS = {
     "vec_percentage",
     "vec_choose",
 }
+VECTOR_FIELD_REDUCERS = {
+    "vec_avg",
+    "vec_sum",
+    "vec_max",
+    "vec_min",
+    "vec_count",
+    "vec_range",
+    "vec_stddev",
+    "vec_skewness",
+    "vec_kurtosis",
+    "vec_ir",
+    "vec_norm",
+    "vec_percentage",
+    "vec_choose",
+}
 
 
 @dataclass(frozen=True)
@@ -390,18 +405,22 @@ class WQLegalInputRegistry:
             field_specs.append(spec)
 
         vector_fields = [spec for spec in field_specs if str(spec.get("type") or "").upper() == "VECTOR"]
-        has_vector_operator = any(operator in VECTOR_OPERATORS for operator in operators)
-        if vector_fields and not has_vector_operator:
+        has_vector_field_reducer = any(
+            operator in VECTOR_FIELD_REDUCERS for operator in operators
+        )
+        if vector_fields and not has_vector_field_reducer:
             errors.append({
                 "code": "illegal_field_type",
                 "fields": sorted(str(spec.get("id")) for spec in vector_fields),
-                "message": "VECTOR fields must be reduced with vec_* or vector neutralization operators",
+                "message": "VECTOR fields must be reduced with a vec_* field reducer",
             })
-        if has_vector_operator and not vector_fields:
+        if has_vector_field_reducer and not vector_fields:
             errors.append({
                 "code": "illegal_field_type",
-                "operators": sorted(operator for operator in operators if operator in VECTOR_OPERATORS),
-                "message": "vector operators require at least one VECTOR field",
+                "operators": sorted(
+                    operator for operator in operators if operator in VECTOR_FIELD_REDUCERS
+                ),
+                "message": "vec_* field reducers require at least one VECTOR field",
             })
 
         return WQCandidateValidationResult(
