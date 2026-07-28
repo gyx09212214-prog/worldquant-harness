@@ -139,3 +139,39 @@ def test_final_audit_is_privacy_safe(tmp_path: Path) -> None:
     assert audit["privacy"]["formulas_omitted"] is True
     assert audit["privacy"]["field_names_omitted"] is True
     assert audit["privacy"]["github_publishable"] is True
+
+
+def test_build_evidence_supports_a_larger_strict_baseline(
+    tmp_path: Path,
+) -> None:
+    root, ids, baseline_dir, get_dir = _fixture(tmp_path)
+    baseline_path = root / baseline_dir / "platform_get.status.jsonl"
+    baseline_rows = [
+        json.loads(line)
+        for line in baseline_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    baseline_rows.extend(
+        {
+            "alpha_id": f"baseline{index}",
+            "platform_status": "ACTIVE",
+            "sc_value": 0.50,
+        }
+        for index in range(21, 31)
+    )
+    _write_jsonl(baseline_path, baseline_rows)
+    _write_json(
+        root / baseline_dir / "platform_get.summary.json",
+        {"checked": 30, "active": 30},
+    )
+
+    audit = builder.build_evidence(
+        root,
+        expected_ids=ids,
+        baseline_dir=baseline_dir,
+        final_get_dir=get_dir,
+        baseline_count=30,
+    )
+
+    assert audit["counts"]["strict_active_baseline"] == 30
+    assert audit["counts"]["combined_strict_active"] == 40
