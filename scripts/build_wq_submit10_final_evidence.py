@@ -86,6 +86,7 @@ def build_evidence(
     baseline_dir: Path = BASELINE_DIR,
     final_get_dir: Path = FINAL_GET_DIR,
     goal_run_glob: str = GOAL_RUN_GLOB,
+    baseline_count: int = 20,
 ) -> dict[str, Any]:
     expected = set(expected_ids)
     if len(expected) != 10:
@@ -97,17 +98,20 @@ def build_evidence(
     baseline_rows = _read_jsonl(baseline_status_path)
     _validate_platform_rows(
         baseline_rows,
-        expected_count=20,
+        expected_count=baseline_count,
         label="strict ACTIVE baseline",
     )
     baseline_summary = json.loads(
         baseline_summary_path.read_text(encoding="utf-8")
     )
     if (
-        int(baseline_summary.get("checked") or 0) != 20
-        or int(baseline_summary.get("active") or 0) != 20
+        int(baseline_summary.get("checked") or 0) != baseline_count
+        or int(baseline_summary.get("active") or 0) != baseline_count
     ):
-        raise RuntimeError("strict ACTIVE baseline summary is not 20/20")
+        raise RuntimeError(
+            "strict ACTIVE baseline summary is not "
+            f"{baseline_count}/{baseline_count}"
+        )
 
     get_dir = root / final_get_dir
     get_status_path = get_dir / "platform_get.status.jsonl"
@@ -241,10 +245,10 @@ def build_evidence(
             "max_transport_posts_per_alpha": 1,
         },
         "counts": {
-            "strict_active_baseline": 20,
+            "strict_active_baseline": baseline_count,
             "new_active_target": 10,
             "new_active_verified": 10,
-            "combined_strict_active": 30,
+            "combined_strict_active": baseline_count + 10,
             "goal_scope_live_runs": len(run_rows),
             "zero_post_live_runs": sum(
                 1 for row in run_rows if row["submit_attempts"] == 0
