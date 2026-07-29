@@ -1,5 +1,9 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
+import requests
+
+from worldquant_harness.wq_agent_core.engine import WQBrainPlatformGateway
 from worldquant_harness.wq_brain_client import WQBrainClient
 
 
@@ -29,6 +33,57 @@ def test_submit_alpha_classifies_prod_correlation_403():
     assert result["failure_kind"] == "prod_correlation"
     assert result["prod_value"] == 0.81
     assert result["review_checks"]["prod_correlation"]["result"] == "FAIL"
+
+
+def test_bounded_submit_uses_one_post_and_get_only_reconciliation():
+    client = WQBrainClient(email="a@b.com", password="pw")
+    session = MagicMock()
+    session.post.return_value = _response(202, {})
+    session.get.return_value = _response(200, {
+        "status": "UNSUBMITTED",
+        "is": {
+            "checks": [
+                {"name": "SELF_CORRELATION", "result": "PASS", "value": 0.5, "limit": 0.7},
+                {"name": "PROD_CORRELATION", "result": "PASS", "value": 0.2, "limit": 0.7},
+            ]
+        },
+    })
+    client._session = session
+
+    with patch("worldquant_harness.wq_brain_client.time.sleep"):
+        result = client.submit_alpha("alpha1", max_post_attempts=1)
+
+    assert session.post.call_count == 1
+    assert session.get.call_count >= 1
+    assert result["ok"] is False
+    assert result["submit_post_attempts"] == 1
+    assert result["submit_post_limit"] == 1
+    assert result["reconciled_platform_status"] == "UNSUBMITTED"
+
+
+def test_platform_gateway_caps_each_logical_submit_at_one_transport_post():
+    client = MagicMock()
+    client.submit_alpha.return_value = {"ok": False}
+
+    WQBrainPlatformGateway(client).submit("alpha1")
+
+    client.submit_alpha.assert_called_once_with("alpha1", max_post_attempts=1)
+
+
+def test_bounded_submit_reconciles_ambiguous_post_with_get_only():
+    client = WQBrainClient(email="a@b.com", password="pw")
+    session = MagicMock()
+    session.post.side_effect = requests.Timeout("ambiguous transport result")
+    session.get.return_value = _response(200, {"status": "ACTIVE"})
+    client._session = session
+
+    result = client.submit_alpha("alpha1", max_post_attempts=1)
+
+    assert result["ok"] is True
+    assert result["platform_status"] == "ACTIVE"
+    assert result["submit_post_attempts"] == 1
+    assert session.post.call_count == 1
+    assert session.get.call_count == 1
 
 
 def test_poll_alpha_submission_returns_active_with_review_checks():
@@ -135,6 +190,66 @@ def test_check_alpha_submission_empty_review_times_out_as_pending():
     assert result["ok"] is False
     assert result["failure_kind"] == "correlation_pending"
     assert session.get.call_count == 2
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "interval", "expected_wait"),
+    [
+        ("10", 1.5, 10.0),
+        ("10.25", 1.5, 10.25),
+        (None, 1.5, 1.5),
+    ],
+)
+def test_check_alpha_submission_accepts_numeric_retry_after_and_float_default(
+    retry_after: str | None,
+    interval: float,
+    expected_wait: float,
+):
+    client = WQBrainClient(email="a@b.com", password="pw")
+    session = MagicMock()
+    rate_limited = _response(429, {})
+    rate_limited.headers = {} if retry_after is None else {"Retry-After": retry_after}
+    session.get.side_effect = [
+        rate_limited,
+        _response(200, {
+            "status": "UNSUBMITTED",
+            "is": {
+                "checks": [
+                    {"name": "SELF_CORRELATION", "result": "PASS", "value": 0.5, "limit": 0.7}
+                ]
+            },
+        }),
+    ]
+    client._session = session
+
+    with patch("worldquant_harness.wq_brain_client.time.sleep") as sleep:
+        result = client.check_alpha_submission("alpha1", max_polls=2, interval=interval)
+
+    assert result["ok"] is True
+    sleep.assert_called_once_with(expected_wait)
+
+
+def test_check_alpha_submission_single_poll_returns_429_without_sleeping() -> None:
+    client = WQBrainClient(email="a@b.com", password="pw")
+    session = MagicMock()
+    rate_limited = _response(429, {})
+    rate_limited.headers = {"Retry-After": "10.25"}
+    session.get.return_value = rate_limited
+    client._session = session
+
+    with patch("worldquant_harness.wq_brain_client.time.sleep") as sleep:
+        result = client.check_alpha_submission("alpha1", max_polls=1, interval=1.5)
+
+    assert result == {
+        "ok": False,
+        "alpha_id": "alpha1",
+        "status_code": 429,
+        "failure_kind": "rate_limited",
+        "error": "check submission rate limited",
+        "retry_after_seconds": 10.25,
+    }
+    session.get.assert_called_once()
+    sleep.assert_not_called()
 
 
 def test_get_alpha_raw_uses_get_only():

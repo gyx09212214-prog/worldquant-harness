@@ -1,8 +1,10 @@
 from worldquant_harness.wq_review import (
     correlation_failure_detail,
+    correlation_result_label,
     parse_review_checks,
     primary_failure_kind,
     review_checks_passed,
+    review_has_pending_correlation,
 )
 
 
@@ -64,3 +66,21 @@ def test_missing_checks_are_stable_and_pass_requires_known_pass():
     assert missing["prod_correlation"]["result"] == "MISSING"
     assert review_checks_passed(missing) is False
     assert review_checks_passed(passed) is True
+
+
+def test_error_is_preserved_and_treated_as_pending():
+    review = parse_review_checks({
+        "is": {
+            "checks": [
+                {"name": "SELF_CORRELATION", "result": "PASS", "value": 0.4},
+                {"name": "SELF_CORRELATION", "result": "ERROR"},
+                {"name": "PROD_CORRELATION", "result": "PASS", "value": 0.2},
+            ]
+        }
+    })
+
+    assert review["self_correlation"]["result"] == "ERROR"
+    assert review["pending"] == ["self_correlation"]
+    assert review_has_pending_correlation(review) is True
+    assert review_checks_passed(review) is False
+    assert correlation_result_label(review) == "SELF=ERROR, PROD=PASS"
