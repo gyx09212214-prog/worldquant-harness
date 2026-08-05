@@ -499,7 +499,13 @@ class ExpressionParser:
 
     def _sub_parse(self, expr: str) -> Callable[[pd.DataFrame], pd.Series]:
         """Parse a sub-expression, incrementing depth."""
-        return self.parse(expr, self._depth + 1)
+        parent_depth = self._depth
+        try:
+            return self.parse(expr, parent_depth + 1)
+        finally:
+            # Sibling branches share this parser instance. Restore the caller's
+            # depth so expression width is not mistaken for nesting depth.
+            self._depth = parent_depth
 
     def _validate_window(self, window: int, func_name: str) -> int:
         """Validate rolling window size."""

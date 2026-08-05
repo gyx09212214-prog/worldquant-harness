@@ -15,7 +15,6 @@ from .artifact_io import read_json, utc_now, write_json
 from .expression_parser import normalize_expression
 from .wq_expression_utils import expression_fields
 
-
 POLICY_VERSION = "wq-field-diversity-v1"
 
 GROUPING_FIELDS = {

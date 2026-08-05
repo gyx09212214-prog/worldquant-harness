@@ -255,6 +255,11 @@ class TestCompositeExpressions:
 
 
 class TestValidation:
+    def test_wide_sibling_expression_does_not_accumulate_depth(self):
+        wide = " + ".join(["rank(close)"] * 40)
+
+        parse_expression(wide)
+
     def test_max_depth_exceeded(self):
         deep = "abs(" * 110 + "close" + ")" * 110
         with pytest.raises(ValueError, match="nesting too deep"):

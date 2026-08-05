@@ -26,7 +26,6 @@ from worldquant_harness.wq_diversity import (
 )
 from worldquant_harness.wq_efficiency import annotate_candidate_identity
 
-
 SETTINGS = {
     "account": "primary",
     "region": "USA",
@@ -46,6 +45,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument("--limit", type=int, default=80)
     parser.add_argument("--seed", type=int, default=20260805)
+    parser.add_argument(
+        "--component-count",
+        type=int,
+        choices=(4, 5),
+        default=5,
+        help="Number of equal-weight ACTIVE components to combine.",
+    )
     args = parser.parse_args(argv)
 
     report_root = _resolve(args.report_root)
@@ -60,11 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     seen: set[str] = set()
     attempts = 0
     policy = DiversityPolicy()
+    minimum_family_count = 4 if args.component_count == 4 else 3
 
     while len(candidates) < args.limit and attempts < 30000:
         attempts += 1
-        chosen = rng.sample(components, 5)
-        if len({row["family"] for row in chosen}) < 3:
+        chosen = rng.sample(components, args.component_count)
+        if len({row["family"] for row in chosen}) < minimum_family_count:
             continue
         if any(
             weighted_field_jaccard(left["record"]["fields"], right["record"]["fields"]) > 0.45
@@ -76,8 +83,8 @@ def main(argv: list[str] | None = None) -> int:
         if key in seen:
             continue
         seen.add(key)
-        terms = [f"0.20*rank(({row['source']['expression']}))" for row in chosen]
-        expression = "rank(" + "+".join(terms) + ")"
+        component_weight = round(1.0 / args.component_count, 2)
+        expression = _ensemble_expression(chosen, component_weight)
         try:
             validate_wq_expression(expression)
         except Exception:
@@ -86,16 +93,16 @@ def main(argv: list[str] | None = None) -> int:
             "tag": f"round5-strict-active-ensemble-{len(candidates) + 1:03d}",
             "source": "equal-weight-field-dissimilar-active-ensemble",
             "source_family": "strict-diversity-active-ensembles",
-            "candidate_family": "multi-domain-five-active-ensemble",
+            "candidate_family": f"multi-domain-{args.component_count}-active-ensemble",
             "diversity_family": "multi_domain_ensemble",
             "diversity_core_signature": f"active-ensemble:{hashlib.sha256(key.encode()).hexdigest()[:20]}",
             "expression": expression,
             "simulation_settings": SETTINGS,
             "parent_alpha_ids": parent_ids,
             "ensemble_design": {
-                "component_count": 5,
-                "component_weight": 0.20,
-                "minimum_component_family_count": 3,
+                "component_count": args.component_count,
+                "component_weight": component_weight,
+                "minimum_component_family_count": minimum_family_count,
                 "maximum_component_pair_field_jaccard": 0.45,
                 "component_families": [item["family"] for item in chosen],
                 "component_metrics": [
@@ -161,9 +168,9 @@ def main(argv: list[str] | None = None) -> int:
         "offline_only": True,
         "submit_posts": 0,
         "criteria": {
-            "component_count": 5,
-            "component_weight": 0.20,
-            "minimum_component_family_count": 3,
+            "component_count": args.component_count,
+            "component_weight": round(1.0 / args.component_count, 2),
+            "minimum_component_family_count": minimum_family_count,
             "maximum_component_pair_field_jaccard": 0.45,
             "self_correlation_cutoff_exclusive": 0.5,
             "legacy_weighted_field_jaccard_max": 0.75,
@@ -197,6 +204,14 @@ def _component(row: dict[str, Any]) -> dict[str, Any] | None:
         return None
     record = build_diversity_record(row)
     return {"source": row, "record": record, "family": infer_family(row, record["fields"])}
+
+
+def _ensemble_expression(chosen: list[dict[str, Any]], component_weight: float) -> str:
+    terms = [
+        f"{component_weight:.2f}*rank(({row['source']['expression']}))"
+        for row in chosen
+    ]
+    return "rank(" + "+".join(terms) + ")"
 
 
 def _active_receipts(report_root: Path) -> list[dict[str, Any]]:
