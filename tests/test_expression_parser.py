@@ -255,6 +255,11 @@ class TestCompositeExpressions:
 
 
 class TestValidation:
+    def test_wide_sibling_expression_does_not_accumulate_depth(self):
+        wide = " + ".join(["rank(close)"] * 40)
+
+        parse_expression(wide)
+
     def test_max_depth_exceeded(self):
         deep = "abs(" * 110 + "close" + ")" * 110
         with pytest.raises(ValueError, match="nesting too deep"):
@@ -386,6 +391,10 @@ class TestWQMode:
         fn = parse_expression("ts_regression(close, volume, 20, 1, 2)", mode="wq")
         assert callable(fn)
 
+    def test_wq_remote_only_ts_regression_uses_platform_defaults(self):
+        fn = parse_expression("ts_regression(close, volume, 20)", mode="wq")
+        assert callable(fn)
+
     def test_wq_remote_only_vec_avg(self):
         fn = parse_expression("vec_avg(close, open)", mode="wq")
         assert callable(fn)
@@ -396,6 +405,10 @@ class TestWQMode:
 
     def test_wq_remote_only_days_from_last_change(self):
         fn = parse_expression("days_from_last_change(volume)", mode="wq")
+        assert callable(fn)
+
+    def test_wq_remote_only_ts_count_nans(self):
+        fn = parse_expression("ts_count_nans(close, 20)", mode="wq")
         assert callable(fn)
 
     def test_wq_remote_only_indneutralize(self):
@@ -427,6 +440,8 @@ class TestWQMode:
     def test_wq_arg_count_validation(self):
         with pytest.raises(ValueError, match="至少需要 2 个参数"):
             parse_expression("vector_neut(close)", mode="wq")
+        with pytest.raises(ValueError, match="至少需要 2 个参数"):
+            parse_expression("ts_count_nans(close)", mode="wq")
 
     def test_wq_complex_expression(self):
         fn = parse_expression(

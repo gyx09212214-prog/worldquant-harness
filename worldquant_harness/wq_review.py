@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 CORRELATION_KINDS = ("self_correlation", "prod_correlation")
-_RESULT_ORDER = {"FAIL": 4, "PENDING": 3, "WARNING": 2, "PASS": 1, "MISSING": 0}
+_RESULT_ORDER = {"FAIL": 5, "ERROR": 4, "PENDING": 3, "WARNING": 2, "PASS": 1, "MISSING": 0}
 
 
 def parse_review_checks(payload: dict | None) -> dict:
@@ -41,7 +41,7 @@ def parse_review_checks(payload: dict | None) -> dict:
         result = normalized[kind]["result"]
         if result == "FAIL":
             normalized["failed"].append(kind)
-        elif result == "PENDING":
+        elif result in {"PENDING", "ERROR"}:
             normalized["pending"].append(kind)
 
     return normalized
@@ -133,7 +133,7 @@ def _normalize_check(check: dict) -> dict:
 
 def _normalize_result(value: Any) -> str:
     result = str(value or "MISSING").upper()
-    if result in {"PASS", "FAIL", "PENDING", "WARNING"}:
+    if result in {"PASS", "FAIL", "PENDING", "WARNING", "ERROR"}:
         return result
     return "MISSING"
 

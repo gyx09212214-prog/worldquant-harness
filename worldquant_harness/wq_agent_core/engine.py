@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -45,8 +46,9 @@ RETRIABLE_SUBMIT_FAILURES = {
 class WQBrainPlatformGateway:
     """Adapter for the existing synchronous WQ BRAIN client."""
 
-    def __init__(self, client: Any):
+    def __init__(self, client: Any, *, max_submit_posts_per_call: int = 1):
         self.client = client
+        self.max_submit_posts_per_call = max_submit_posts_per_call
 
     def simulate(
         self,
@@ -76,7 +78,10 @@ class WQBrainPlatformGateway:
         return self.client.check_alpha_submission(alpha_id, max_polls=max_polls, interval=interval)
 
     def submit(self, alpha_id: str) -> dict[str, Any]:
-        return self.client.submit_alpha(alpha_id)
+        return self.client.submit_alpha(
+            alpha_id,
+            max_post_attempts=self.max_submit_posts_per_call,
+        )
 
     def status(self, alpha_id: str) -> dict[str, Any]:
         return self.client.check_alpha_status(alpha_id)
@@ -750,6 +755,8 @@ def build_submit_record(
         "final_status": final_status,
         "status_code": submit.get("status_code"),
         "platform_status": submit.get("platform_status"),
+        "submit_post_attempts": submit.get("submit_post_attempts"),
+        "submit_post_limit": submit.get("submit_post_limit"),
         "failure_kind": submit.get("failure_kind"),
         "detail": submit.get("detail"),
         "submit_result": submit,
@@ -765,15 +772,18 @@ def correlation_gate(check_row: dict[str, Any], *, cutoff: float) -> tuple[bool,
     if status != "api_check_readable":
         return False, "correlation_check_error"
     self_result = str(check_row.get("sc_result") or "").upper()
-    if self_result == "PENDING":
+    if self_result in {"PENDING", "ERROR"}:
         return False, "correlation_pending"
     if self_result != "PASS":
         return False, "self_correlation_fail" if self_result == "FAIL" else "correlation_missing"
     self_value = first_float(check_row.get("sc_value"))
-    if self_value is not None and self_value > float(cutoff):
+    if self_value is None or not math.isfinite(self_value):
+        return False, "correlation_missing"
+    # The policy is an exclusive upper bound: SELF must be strictly below it.
+    if self_value >= float(cutoff):
         return False, "self_correlation_above_cutoff"
     prod_result = str(check_row.get("prod_corr_result") or "MISSING").upper()
-    if prod_result == "PENDING":
+    if prod_result in {"PENDING", "ERROR"}:
         return False, "correlation_pending"
     if prod_result == "FAIL":
         return False, "prod_correlation_fail"
@@ -787,7 +797,11 @@ def _candidate_metadata(candidate_row: dict[str, Any], settings: EffectiveSettin
         "tag": candidate_row.get("tag"),
         "source": candidate_row.get("source"),
         "source_family": candidate_row.get("source_family") or candidate_row.get("mutation_strategy"),
+        "diversity_family": candidate_row.get("diversity_family"),
+        "diversity_core_signature": candidate_row.get("diversity_core_signature"),
         "field_signature": candidate_row.get("field_signature"),
+        "primary_fields": candidate_row.get("primary_fields") or [],
+        "partition_design": candidate_row.get("partition_design"),
         "provenance": candidate_row.get("provenance"),
         "mutation_strategy": candidate_row.get("mutation_strategy"),
         "rationale": candidate_row.get("rationale"),
@@ -812,7 +826,11 @@ def _record_context(row: dict[str, Any]) -> dict[str, Any]:
         "tag",
         "source",
         "source_family",
+        "diversity_family",
+        "diversity_core_signature",
         "field_signature",
+        "primary_fields",
+        "partition_design",
         "provenance",
         "mutation_strategy",
         "rationale",

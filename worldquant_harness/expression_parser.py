@@ -219,12 +219,13 @@ _WQ_REMOTE_ONLY_OPS = {
     'group_neutralize': (2, 2, 'group_neutralize(x, group)'),
     'group_mean': (2, 2, 'group_mean(x, group)'),
     'group_vector_neut': (2, 2, 'group_vector_neut(x, group)'),
-    'ts_regression': (4, 5, 'ts_regression(y, x, d, lag, rettype)'),
+    'ts_regression': (3, 5, 'ts_regression(y, x, d, lag, rettype)'),
     'ts_decay_exp_window': (2, 3, 'ts_decay_exp_window(x, d, factor)'),
     'ts_ir': (2, 2, 'ts_ir(x, d)'),
     'ts_skewness': (2, 2, 'ts_skewness(x, d)'),
     'ts_kurtosis': (2, 2, 'ts_kurtosis(x, d)'),
     'ts_backfill': (2, 2, 'ts_backfill(x, d)'),
+    'ts_count_nans': (2, 2, 'ts_count_nans(x, d)'),
     'normalize': (1, 1, 'normalize(x)'),
     'quantile': (1, 3, 'quantile(x) or quantile(x, driver, n)'),
     'pasteurize': (1, 1, 'pasteurize(x)'),
@@ -498,7 +499,13 @@ class ExpressionParser:
 
     def _sub_parse(self, expr: str) -> Callable[[pd.DataFrame], pd.Series]:
         """Parse a sub-expression, incrementing depth."""
-        return self.parse(expr, self._depth + 1)
+        parent_depth = self._depth
+        try:
+            return self.parse(expr, parent_depth + 1)
+        finally:
+            # Sibling branches share this parser instance. Restore the caller's
+            # depth so expression width is not mistaken for nesting depth.
+            self._depth = parent_depth
 
     def _validate_window(self, window: int, func_name: str) -> int:
         """Validate rolling window size."""
@@ -1069,15 +1076,19 @@ def normalize_expression(expression: str) -> str:
 
 _OP_PATTERN = re.compile(r'([a-z_][a-z0-9_]*)\s*\(')
 _FIELD_PATTERN = re.compile(r'\b([a-z_][a-z0-9_]*)\b')
+_STRING_LITERAL_PATTERN = re.compile(r'''(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')''')
+_NAMED_ARGUMENT_PATTERN = re.compile(r'\b([a-z_][a-z0-9_]*)\s*=(?!=)')
 
 
 def extract_components(expression: str) -> dict:
     """Extract operator names and field names from an expression."""
     expr_lower = expression.lower()
-    operators = set(_OP_PATTERN.findall(expr_lower))
-    all_words = set(_FIELD_PATTERN.findall(expr_lower))
+    expression_without_strings = _STRING_LITERAL_PATTERN.sub('', expr_lower)
+    operators = set(_OP_PATTERN.findall(expression_without_strings))
+    named_arguments = set(_NAMED_ARGUMENT_PATTERN.findall(expression_without_strings))
+    all_words = set(_FIELD_PATTERN.findall(expression_without_strings))
     all_ops = _WQ_OPERATORS | _LOCAL_ONLY_OPERATORS | {'if', 'else', 'and', 'or'}
-    fields = all_words - operators - all_ops - {'true', 'false'}
+    fields = all_words - operators - all_ops - named_arguments - {'true', 'false'}
     try:
         fields = {w for w in fields if not float(w) and False}
     except ValueError:

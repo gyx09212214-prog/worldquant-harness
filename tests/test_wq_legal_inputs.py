@@ -108,6 +108,7 @@ def test_validate_core_and_discovered_fields(workdir):
     assert registry.validate_expression("rank(snt1_d1_netearningsrevision)", region="USA", universe="TOP3000", delay=1).ok
     assert registry.validate_expression("rank(string_field)", region="USA", universe="TOP3000", delay=1).ok
     assert registry.validate_expression("group_neutralize(rank(close), subindustry)", region="USA", universe="TOP3000", delay=1).ok
+    assert registry.validate_expression("rank(ts_count_nans(close, 20))", region="USA", universe="TOP3000", delay=1).ok
 
 
 def test_validate_rejects_static_fallback_fields_in_strict_mode(workdir):
@@ -145,6 +146,26 @@ def test_validate_rejects_forbidden_operator_unknown_field_and_vector_misuse(wor
 
     vector_ok = registry.validate_expression("vec_avg(scl12_buzzvec)", region="USA", universe="TOP3000", delay=1)
     assert vector_ok.ok is True
+
+    # WQ's cross-sectional vector_neut works on ordinary per-instrument
+    # MATRIX expressions.  The word "vector" in its name does not mean a
+    # VECTOR-typed dataset field is required.
+    matrix_vector_neut = registry.validate_expression(
+        "vector_neut(rank(close), rank(volume))",
+        region="USA",
+        universe="TOP3000",
+        delay=1,
+    )
+    assert matrix_vector_neut.ok is True
+
+    raw_vector_neut = registry.validate_expression(
+        "vector_neut(scl12_buzzvec, rank(volume))",
+        region="USA",
+        universe="TOP3000",
+        delay=1,
+    )
+    assert raw_vector_neut.ok is False
+    assert raw_vector_neut.primary_error_code() == "illegal_field_type"
 
 
 def test_validate_candidate_schema_and_settings(workdir):
