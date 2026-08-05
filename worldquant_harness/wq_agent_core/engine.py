@@ -779,7 +779,8 @@ def correlation_gate(check_row: dict[str, Any], *, cutoff: float) -> tuple[bool,
     self_value = first_float(check_row.get("sc_value"))
     if self_value is None or not math.isfinite(self_value):
         return False, "correlation_missing"
-    if self_value > float(cutoff):
+    # The policy is an exclusive upper bound: SELF must be strictly below it.
+    if self_value >= float(cutoff):
         return False, "self_correlation_above_cutoff"
     prod_result = str(check_row.get("prod_corr_result") or "MISSING").upper()
     if prod_result in {"PENDING", "ERROR"}:
@@ -796,7 +797,11 @@ def _candidate_metadata(candidate_row: dict[str, Any], settings: EffectiveSettin
         "tag": candidate_row.get("tag"),
         "source": candidate_row.get("source"),
         "source_family": candidate_row.get("source_family") or candidate_row.get("mutation_strategy"),
+        "diversity_family": candidate_row.get("diversity_family"),
+        "diversity_core_signature": candidate_row.get("diversity_core_signature"),
         "field_signature": candidate_row.get("field_signature"),
+        "primary_fields": candidate_row.get("primary_fields") or [],
+        "partition_design": candidate_row.get("partition_design"),
         "provenance": candidate_row.get("provenance"),
         "mutation_strategy": candidate_row.get("mutation_strategy"),
         "rationale": candidate_row.get("rationale"),
@@ -821,7 +826,11 @@ def _record_context(row: dict[str, Any]) -> dict[str, Any]:
         "tag",
         "source",
         "source_family",
+        "diversity_family",
+        "diversity_core_signature",
         "field_signature",
+        "primary_fields",
+        "partition_design",
         "provenance",
         "mutation_strategy",
         "rationale",

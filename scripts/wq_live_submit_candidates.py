@@ -8,6 +8,7 @@ soon as self-correlation is confirmed below the strict cutoff.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import sys
 import time
@@ -18,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from worldquant_harness.artifact_io import read_jsonl, write_json, write_jsonl
+from worldquant_harness.artifact_io import append_jsonl, read_jsonl, write_json, write_jsonl
 from worldquant_harness.wq_agent_core import (
     EffectiveSettings,
     ExecutionEngine,
@@ -33,6 +34,15 @@ from worldquant_harness.wq_agent_core.domain import stable_hash, utc_now
 from worldquant_harness.wq_agent_core.engine import correlation_gate
 from worldquant_harness.wq_auto_mining import load_dotenv
 from worldquant_harness.wq_brain_client import get_client, is_configured
+from worldquant_harness.wq_diversity import (
+    DiversityPolicy,
+    build_diversity_record,
+    evaluate_diversity,
+    final_diversity_summary,
+    load_diversity_ledger,
+    merge_diversity_records,
+    save_diversity_ledger,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         "simulation_results": output_dir / "simulation_results.jsonl",
         "check_results": output_dir / "check_results.jsonl",
         "submit_results": output_dir / "submit_results.jsonl",
+        "diversity_results": output_dir / "diversity_results.jsonl",
         "summary": output_dir / "summary.json",
     }
 
@@ -64,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
 
     existing_submit_rows = read_jsonl(paths["submit_results"]) if args.resume else []
     submitted_successes = _active_rows(existing_submit_rows)
+    diversity_policy = _diversity_policy(args)
+    diversity_accepted, diversity_legacy = _load_diversity_inventories(
+        args,
+        paths["submit_results"],
+        diversity_policy,
+    )
     legacy_resume = args.resume and not paths["agent_events"].is_file()
     tried_keys = {
         str(row.get("candidate_key") or "")
@@ -131,6 +148,51 @@ def main(argv: list[str] | None = None) -> int:
             if key in tried_keys:
                 continue
             candidate = {**candidate, "candidate_key": key}
+
+            if args.diversity_ledger:
+                diversity_gate = evaluate_diversity(
+                    candidate,
+                    diversity_accepted,
+                    diversity_legacy,
+                    policy=diversity_policy,
+                )
+                append_jsonl(
+                    paths["diversity_results"],
+                    {
+                        "created_at": _now(),
+                        "run_id": run_id,
+                        "source_index": candidate.get("source_index"),
+                        "tag": candidate.get("tag"),
+                        "candidate_key": key,
+                        **diversity_gate,
+                    },
+                )
+                if not diversity_gate["ok"]:
+                    _write_progress(
+                        paths["progress"],
+                        candidate,
+                        index,
+                        len(candidates),
+                        "diversity_blocked",
+                        message=",".join(diversity_gate["reasons"]),
+                    )
+                    print(
+                        json.dumps(
+                            {
+                                "event": "diversity_blocked",
+                                "run_id": run_id,
+                                "index": index,
+                                "tag": candidate.get("tag"),
+                                "reasons": diversity_gate["reasons"],
+                                "max_new_weighted_jaccard": diversity_gate["max_new_weighted_jaccard"],
+                                "max_legacy_weighted_jaccard": diversity_gate["max_legacy_weighted_jaccard"],
+                            },
+                            ensure_ascii=False,
+                        ),
+                        flush=True,
+                    )
+                    _write_summary(paths["summary"], paths, args, submitted_successes, run_id=run_id, runtime_error=runtime_error)
+                    continue
 
             _write_progress(paths["progress"], candidate, index, len(candidates), "simulate_started")
             settings = EffectiveSettings.from_mapping(_settings_for_candidate(candidate, args))
@@ -207,6 +269,23 @@ def main(argv: list[str] | None = None) -> int:
                         "final_status": "ACTIVE",
                     },
                 ])
+                if args.diversity_ledger:
+                    diversity_record = build_diversity_record(
+                        {
+                            **candidate,
+                            **(result.simulation_row or {}),
+                            **(result.check_row or {}),
+                            **(result.submit_row or {}),
+                        },
+                        alpha_id=result.alpha_id,
+                        candidate_uid=result.candidate.candidate_uid,
+                    )
+                    diversity_accepted = merge_diversity_records(diversity_accepted, [diversity_record])
+                    save_diversity_ledger(
+                        str(_resolve(args.diversity_ledger)),
+                        diversity_accepted,
+                        policy=diversity_policy,
+                    )
             metrics = result.simulation_row or {}
             correlations = result.check_row or {}
             print(
@@ -284,9 +363,19 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--truncation", type=float, default=0.08)
     parser.add_argument("--check-polls", type=int, default=4)
     parser.add_argument("--check-interval", type=int, default=10)
-    parser.add_argument("--self-corr-cutoff", type=float, default=0.7)
+    parser.add_argument("--self-corr-cutoff", type=float, default=0.5, help="Exclusive upper bound: SELF must be strictly below this value")
     parser.add_argument("--submit-pending", action="store_true", help="Submit when platform checks pass but correlation review is still pending/missing")
-    parser.add_argument("--max-submit-retries", type=int, default=1, help="Retries after the first submit, only when platform explicitly reports UNSUBMITTED")
+    parser.add_argument("--max-submit-retries", type=int, default=0, help="Retries after the first submit, only when platform explicitly reports UNSUBMITTED")
+    parser.add_argument("--diversity-ledger", default=None, help="Enable hard diversity gates and persist accepted ACTIVE records here")
+    parser.add_argument("--diversity-accepted-glob", action="append", default=[], help="Receipt glob(s) used to reconcile this goal's accepted inventory")
+    parser.add_argument("--diversity-legacy-glob", action="append", default=[], help="Receipt glob(s) used as the legacy overlap inventory")
+    parser.add_argument("--max-new-field-jaccard", type=float, default=0.60)
+    parser.add_argument("--max-legacy-field-jaccard", type=float, default=0.75)
+    parser.add_argument("--max-core-signature-count", type=int, default=2)
+    parser.add_argument("--max-research-field-count", type=int, default=3)
+    parser.add_argument("--max-market-helper-field-count", type=int, default=10)
+    parser.add_argument("--max-diversity-family-count", type=int, default=4)
+    parser.add_argument("--min-final-diversity-families", type=int, default=8)
     parser.add_argument("--delay-seconds", type=float, default=1.0)
     return parser.parse_args(argv)
 
@@ -389,6 +478,10 @@ def _write_summary(
     check_rows = read_jsonl(paths["check_results"])
     submit_rows = read_jsonl(paths["submit_results"])
     event_rows = read_jsonl(paths["agent_events"])
+    diversity_rows = read_jsonl(paths["diversity_results"])
+    diversity_accepted = []
+    if args.diversity_ledger:
+        diversity_accepted = load_diversity_ledger(str(_resolve(args.diversity_ledger)))["accepted"]
     summary = {
         "ok": runtime_error is None and len(submitted_successes) >= args.target_successes,
         "updated_at": _now(),
@@ -404,6 +497,17 @@ def _write_summary(
         "check_counts": _counts(row.get("api_check_status") for row in check_rows),
         "submit_counts": _counts(row.get("final_status") for row in submit_rows),
         "event_counts": _counts(row.get("event_type") for row in event_rows),
+        "diversity": {
+            "enabled": bool(args.diversity_ledger),
+            "policy": _diversity_policy(args).to_dict(),
+            "gate_counts": _counts("allowed" if row.get("ok") else "blocked" for row in diversity_rows),
+            "block_reason_counts": _counts(
+                reason
+                for row in diversity_rows
+                for reason in (row.get("reasons") or [])
+            ),
+            "accepted_inventory": final_diversity_summary(diversity_accepted, policy=_diversity_policy(args)),
+        },
         "files": {name: str(path) for name, path in paths.items()},
     }
     write_json(paths_summary, summary)
@@ -418,6 +522,69 @@ def _active_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         active_by_id[alpha_id] = row
     return list(active_by_id.values())
+
+
+def _diversity_policy(args: argparse.Namespace) -> DiversityPolicy:
+    return DiversityPolicy(
+        max_new_weighted_jaccard=args.max_new_field_jaccard,
+        max_legacy_weighted_jaccard=args.max_legacy_field_jaccard,
+        max_core_signature_count=args.max_core_signature_count,
+        max_research_field_count=args.max_research_field_count,
+        max_market_helper_field_count=args.max_market_helper_field_count,
+        max_family_count=args.max_diversity_family_count,
+        min_final_family_count=args.min_final_diversity_families,
+    )
+
+
+def _load_diversity_inventories(
+    args: argparse.Namespace,
+    current_submit_path: Path,
+    policy: DiversityPolicy,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not args.diversity_ledger:
+        return [], []
+    ledger_path = _resolve(args.diversity_ledger)
+    accepted = load_diversity_ledger(str(ledger_path))["accepted"]
+    accepted_rows = [
+        *read_jsonl(current_submit_path),
+        *_rows_from_globs(args.diversity_accepted_glob),
+    ]
+    reconciled = [
+        build_diversity_record(row)
+        for row in _active_rows(accepted_rows)
+        if _strict_self_pass(row.get("sc_value"), args.self_corr_cutoff)
+    ]
+    accepted = merge_diversity_records(accepted, reconciled)
+    save_diversity_ledger(str(ledger_path), accepted, policy=policy)
+
+    accepted_ids = {str(row.get("alpha_id") or "") for row in accepted}
+    legacy = [
+        build_diversity_record(row)
+        for row in _active_rows(_rows_from_globs(args.diversity_legacy_glob))
+        if str(row.get("alpha_id") or "") not in accepted_ids
+    ]
+    return accepted, legacy
+
+
+def _rows_from_globs(patterns: list[str]) -> list[dict[str, Any]]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        absolute_pattern = str(Path(pattern) if Path(pattern).is_absolute() else ROOT / pattern)
+        for value in sorted(glob.glob(absolute_pattern, recursive=True)):
+            key = str(Path(value).resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            paths.append(Path(value))
+    return [row for path in paths for row in read_jsonl(path)]
+
+
+def _strict_self_pass(value: Any, cutoff: float) -> bool:
+    try:
+        return float(value) < float(cutoff)
+    except (TypeError, ValueError):
+        return False
 
 
 def _counts(values: Any) -> dict[str, int]:
